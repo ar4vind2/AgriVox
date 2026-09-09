@@ -32,14 +32,14 @@ class TFLiteService {
       }
 
       try {
-        _interpreter = await Interpreter.fromAsset('assets/models/model_quant.tflite');
+        _interpreter = await _loadInterpreter('assets/models/model_quant.tflite');
         _isModelLoaded = true;
-        debugPrint("TFLite model (model_quant.tflite) loaded successfully from assets");
+        debugPrint("TFLite model (model_quant.tflite) loaded successfully");
       } catch (e1) {
         try {
-          _interpreter = await Interpreter.fromAsset('assets/models/yolov8n-cls_int8.tflite');
+          _interpreter = await _loadInterpreter('assets/models/yolov8n-cls_int8.tflite');
           _isModelLoaded = true;
-          debugPrint("TFLite model (yolov8n-cls_int8.tflite) loaded successfully from assets");
+          debugPrint("TFLite model (yolov8n-cls_int8.tflite) loaded successfully");
         } catch (e2) {
           debugPrint("TFLite model not loaded ($e1 / $e2). Dual-Mode fallback active.");
           _isModelLoaded = false;
@@ -47,6 +47,20 @@ class TFLiteService {
       }
     } catch (e) {
       debugPrint("TFLite initialization error: $e");
+    }
+  }
+
+  Future<Interpreter> _loadInterpreter(String assetPath) async {
+    try {
+      return await Interpreter.fromAsset(assetPath);
+    } catch (e) {
+      debugPrint("Interpreter.fromAsset failed: $e. Loading via cached file...");
+      final tempDir = Directory.systemTemp;
+      final fileName = assetPath.split('/').last;
+      final modelFile = File('${tempDir.path}/$fileName');
+      final byteData = await rootBundle.load(assetPath);
+      await modelFile.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+      return Interpreter.fromFile(modelFile);
     }
   }
 
@@ -80,8 +94,12 @@ class TFLiteService {
     await croppedFile.writeAsBytes(img.encodeJpg(resized, quality: 90));
 
     if (_isModelLoaded && _interpreter != null) {
-      final prescription = await _runTFLiteInference(resized);
-      return (croppedImageFile: croppedFile, prescription: prescription);
+      try {
+        final prescription = await _runTFLiteInference(resized);
+        return (croppedImageFile: croppedFile, prescription: prescription);
+      } catch (inferenceError) {
+        debugPrint("TFLite inference error: $inferenceError. Providing agronomy diagnosis.");
+      }
     }
 
     // Realistic offline edge simulation latency (~45ms)
