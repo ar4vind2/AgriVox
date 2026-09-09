@@ -14,7 +14,8 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const AgriVoxApp());
 
-    // Verify title is rendered
-    expect(find.text('AgriVox | Leaf Scanner'), findsOneWidget);
+    // Verify Dashboard title is rendered
+    expect(find.text('AgriVox'), findsOneWidget);
+    expect(find.text('Scan Crop Leaf Lesion'), findsOneWidget);
   });
 }
