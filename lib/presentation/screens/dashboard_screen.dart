@@ -185,13 +185,11 @@ class DashboardScreen extends StatelessWidget {
           // Crop Badges Grid
           Row(
             children: [
-              _buildCropCard("Rubber", "റബ്ബർ", Icons.forest, Colors.teal),
+              _buildCropCard("Tomato", "തക്കാളി", Icons.circle, Colors.red.shade700),
               const SizedBox(width: 10),
-              _buildCropCard("Pepper", "കുരുമുളക്", Icons.grain, Colors.deepOrange),
+              _buildCropCard("Potato", "ഉരുളക്കിഴങ്ങ്", Icons.grass, Colors.brown.shade600),
               const SizedBox(width: 10),
-              _buildCropCard("Tomato", "തക്കാളി", Icons.egg, Colors.red),
-              const SizedBox(width: 10),
-              _buildCropCard("Cardamom", "ഏലം", Icons.spa, Colors.green),
+              _buildCropCard("Bell Pepper", "കാപ്സിക്കം", Icons.spa, Colors.deepOrange.shade600),
             ],
           ),
 

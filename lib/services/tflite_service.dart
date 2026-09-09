@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
@@ -20,18 +21,29 @@ class TFLiteService {
     try {
       try {
         final labelData = await rootBundle.loadString('assets/models/labels.txt');
-        _labels = labelData.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-      } catch (_) {
-        debugPrint("labels.txt not present in assets, ready for Member 1 handoff");
+        _labels = labelData
+            .split('\n')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+        debugPrint("Loaded ${_labels.length} class labels from assets/models/labels.txt");
+      } catch (e) {
+        debugPrint("labels.txt load error: $e");
       }
 
       try {
-        _interpreter = await Interpreter.fromAsset('assets/models/yolov8n-cls_int8.tflite');
+        _interpreter = await Interpreter.fromAsset('assets/models/model_quant.tflite');
         _isModelLoaded = true;
-        debugPrint("TFLite model loaded successfully from assets");
-      } catch (e) {
-        debugPrint("TFLite model pending from Member 1 ($e). Running in Dual-Mode (Mock inference active).");
-        _isModelLoaded = false;
+        debugPrint("TFLite model (model_quant.tflite) loaded successfully from assets");
+      } catch (e1) {
+        try {
+          _interpreter = await Interpreter.fromAsset('assets/models/yolov8n-cls_int8.tflite');
+          _isModelLoaded = true;
+          debugPrint("TFLite model (yolov8n-cls_int8.tflite) loaded successfully from assets");
+        } catch (e2) {
+          debugPrint("TFLite model not loaded ($e1 / $e2). Dual-Mode fallback active.");
+          _isModelLoaded = false;
+        }
       }
     } catch (e) {
       debugPrint("TFLite initialization error: $e");
@@ -79,16 +91,25 @@ class TFLiteService {
   }
 
   Future<DiseasePrescription> _runTFLiteInference(img.Image image) async {
+    // Ultralytics YOLOv8-cls NCHW tensor: [1, 3, 224, 224], Float32 [0.0, 1.0]
     final input = List.generate(
       1,
-      (b) => List.generate(
-        224,
-        (y) => List.generate(
-          224,
-          (x) {
-            final pixel = image.getPixel(x, y);
-            return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
-          },
+      (_) => List.generate(
+        3, // 0: Red, 1: Green, 2: Blue
+        (c) => List.generate(
+          224, // Height (y)
+          (y) => List.generate(
+            224, // Width (x)
+            (x) {
+              final pixel = image.getPixel(x, y);
+              final num val = (c == 0)
+                  ? pixel.r
+                  : (c == 1)
+                      ? pixel.g
+                      : pixel.b;
+              return val / 255.0;
+            },
+          ),
         ),
       ),
     );
@@ -98,24 +119,26 @@ class TFLiteService {
 
     _interpreter!.run(input, output);
 
-    final probabilities = output[0];
+    final rawScores = output[0];
     int maxIndex = 0;
-    double maxScore = probabilities[0];
+    double maxLogit = rawScores.isNotEmpty ? rawScores[0] : 0.0;
 
-    for (int i = 1; i < probabilities.length; i++) {
-      if (probabilities[i] > maxScore) {
-        maxScore = probabilities[i];
+    for (int i = 1; i < rawScores.length; i++) {
+      if (rawScores[i] > maxLogit) {
+        maxLogit = rawScores[i];
         maxIndex = i;
       }
     }
 
+    // Softmax normalization for clean confidence output
+    final expList = rawScores.map((s) => math.exp(s - maxLogit)).toList();
+    final sumExp = expList.reduce((a, b) => a + b);
+    final confidence = sumExp > 0 ? expList[maxIndex] / sumExp : 0.95;
+
     final detectedLabel = (_labels.isNotEmpty && maxIndex < _labels.length)
         ? _labels[maxIndex]
-        : 'rubber_abnormal_leaf_fall';
+        : 'Pepper_bell_Bacterial_spot';
 
-    return DiseasePrescription.samplePrescriptions.firstWhere(
-      (p) => p.diseaseId.toLowerCase() == detectedLabel.toLowerCase(),
-      orElse: () => DiseasePrescription.samplePrescriptions.first,
-    );
+    return DiseasePrescription.fromLabel(detectedLabel, confidence);
   }
 }
