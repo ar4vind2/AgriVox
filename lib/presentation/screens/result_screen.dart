@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/disease_prescription.dart';
+import '../../repositories/prescription_repository.dart';
+import '../../services/voice_service.dart';
 
-class ResultScreen extends StatelessWidget {
+class ResultScreen extends StatefulWidget {
   final File croppedImage;
   final DiseasePrescription prescription;
 
@@ -13,7 +15,97 @@ class ResultScreen extends StatelessWidget {
   });
 
   @override
+  State<ResultScreen> createState() => _ResultScreenState();
+}
+
+class _ResultScreenState extends State<ResultScreen> {
+  final VoiceService _voiceService = VoiceService();
+  final PrescriptionRepository _repository = PrescriptionRepository();
+
+  Prescription? _dbPrescription;
+  bool _isPlayingMalayalam = false;
+  bool _isPlayingEnglish = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initServices();
+  }
+
+  Future<void> _initServices() async {
+    await _voiceService.init();
+    _voiceService.setCompletionHandler(() {
+      if (mounted) {
+        setState(() {
+          _isPlayingMalayalam = false;
+          _isPlayingEnglish = false;
+        });
+      }
+    });
+
+    try {
+      final dbResult = await _repository.getPrescription(widget.prescription.diseaseId);
+      if (mounted) {
+        setState(() {
+          _dbPrescription = dbResult;
+        });
+      }
+    } catch (e) {
+      debugPrint("SQLite DB lookup error: $e");
+    }
+  }
+
+  @override
+  void dispose() {
+    _voiceService.stop();
+    super.dispose();
+  }
+
+  Future<void> _toggleMalayalamVoice() async {
+    if (_isPlayingMalayalam) {
+      await _voiceService.stop();
+      setState(() {
+        _isPlayingMalayalam = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isPlayingMalayalam = true;
+      _isPlayingEnglish = false;
+    });
+
+    if (_dbPrescription != null) {
+      await _voiceService.speakPrescription(
+        diseaseMl: _dbPrescription!.diseaseNameMl,
+        chemicalTreatmentMl: _dbPrescription!.chemicalInstructionsMl,
+        organicTreatmentMl: _dbPrescription!.organicInstructionsMl,
+      );
+    } else {
+      await _voiceService.speakMalayalam(widget.prescription.malayalamAudioText);
+    }
+  }
+
+  Future<void> _toggleEnglishVoice() async {
+    if (_isPlayingEnglish) {
+      await _voiceService.stop();
+      setState(() {
+        _isPlayingEnglish = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isPlayingEnglish = true;
+      _isPlayingMalayalam = false;
+    });
+
+    await _voiceService.speakEnglish(widget.prescription.englishAudioText);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final prescription = widget.prescription;
     final isHealthy = prescription.severity == SeverityLevel.healthy;
     final isSevere = prescription.severity == SeverityLevel.severe;
     final severityColor = isHealthy
@@ -54,7 +146,7 @@ class ResultScreen extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
                   child: Image.file(
-                    croppedImage,
+                    widget.croppedImage,
                     width: 100,
                     height: 100,
                     fit: BoxFit.cover,
@@ -83,12 +175,12 @@ class ResultScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        prescription.diseaseName,
+                        _dbPrescription?.diseaseNameEn ?? prescription.diseaseName,
                         style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, height: 1.2),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        prescription.cropName,
+                        _dbPrescription?.cropName ?? prescription.cropName,
                         style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                       ),
                       const SizedBox(height: 6),
@@ -107,9 +199,12 @@ class ResultScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            prescription.scientificName,
-                            style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey.shade600, fontSize: 11),
+                          Expanded(
+                            child: Text(
+                              prescription.scientificName,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey.shade600, fontSize: 11),
+                            ),
                           ),
                         ],
                       ),
@@ -122,7 +217,7 @@ class ResultScreen extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Voice Copilot Audio Card (Ready for Member 3 TTS integration)
+          // Voice Copilot Audio Card (Offline Indic Malayalam & English TTS)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -146,12 +241,16 @@ class ResultScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.volume_up, color: Colors.white, size: 22),
-                        SizedBox(width: 8),
-                        Text(
-                          "Voice Copilot (Offline)",
+                        Icon(
+                          _isPlayingMalayalam || _isPlayingEnglish ? Icons.graphic_eq : Icons.volume_up,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          "Voice Copilot (Offline TTS)",
                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                       ],
@@ -162,16 +261,20 @@ class ResultScreen extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text(
-                        "മലയാളം / EN",
-                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      child: Text(
+                        _isPlayingMalayalam
+                            ? "Playing ML..."
+                            : _isPlayingEnglish
+                                ? "Playing EN..."
+                                : "മലയാളം / EN",
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  prescription.malayalamAudioText,
+                  _dbPrescription?.diseaseNameMl ?? prescription.malayalamAudioText,
                   style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
                 ),
                 const SizedBox(height: 14),
@@ -180,23 +283,29 @@ class ResultScreen extends StatelessWidget {
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
+                          backgroundColor: _isPlayingMalayalam ? Colors.amber.shade300 : Colors.white,
                           foregroundColor: Colors.green.shade900,
                           elevation: 0,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
-                        icon: const Icon(Icons.play_arrow, size: 20),
-                        label: const Text("കേൾക്കുക (Malayalam)", style: TextStyle(fontWeight: FontWeight.bold)),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Speaking prescription in Malayalam (flutter_tts ready)..."),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        },
+                        icon: Icon(_isPlayingMalayalam ? Icons.stop : Icons.play_arrow, size: 20),
+                        label: Text(
+                          _isPlayingMalayalam ? "നിർത്തുക (Stop)" : "കേൾക്കുക (Malayalam)",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        onPressed: _toggleMalayalamVoice,
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      style: IconButton.styleFrom(
+                        backgroundColor: _isPlayingEnglish ? Colors.amber.shade300 : Colors.white.withValues(alpha: 0.25),
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: Icon(_isPlayingEnglish ? Icons.stop : Icons.volume_up, size: 20),
+                      tooltip: "Listen in English",
+                      onPressed: _toggleEnglishVoice,
                     ),
                   ],
                 ),
@@ -206,7 +315,7 @@ class ResultScreen extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // Symptoms & Pathogen Info
+          // Symptoms & Diagnostic Indicators
           _buildInfoCard(
             title: "Symptoms & Diagnostic Indicators",
             icon: Icons.biotech,
@@ -216,12 +325,14 @@ class ResultScreen extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // Chemical Spray & Treatment
+          // Chemical Spray & Treatment (from KAU Package of Practices SQLite Database)
           _buildInfoCard(
             title: "Chemical Treatment (KAU Practices)",
             icon: Icons.science,
             color: Colors.blue.shade800,
-            content: prescription.chemicalTreatment,
+            content: _dbPrescription != null
+                ? "${_dbPrescription!.chemicalCure} (${_dbPrescription!.dosagePerLiter}g/L)\n\n${_dbPrescription!.chemicalInstructionsMl}"
+                : prescription.chemicalTreatment,
           ),
 
           const SizedBox(height: 12),
@@ -238,18 +349,38 @@ class ResultScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Icon(Icons.calculate, color: Colors.amber.shade900, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Knapsack Tank Preparation (16 Liters)",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber.shade900),
+                    Row(
+                      children: [
+                        Icon(Icons.calculate, color: Colors.amber.shade900, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Knapsack Tank Preparation (16L)",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber.shade900),
+                        ),
+                      ],
                     ),
+                    if (_dbPrescription != null && _dbPrescription!.waitingPeriodDays > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Text(
+                          "Wait: ${_dbPrescription!.waitingPeriodDays} Days",
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade800),
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  prescription.knapsackTankDosage,
+                  _dbPrescription != null && _dbPrescription!.dosagePerLiter > 0
+                      ? "${(_dbPrescription!.dosagePerLiter * 16).toStringAsFixed(1)}g / ml of ${_dbPrescription!.chemicalCure} in 16L knapsack tank. (Concentration: ${_dbPrescription!.dosagePerLiter}g per liter)."
+                      : prescription.knapsackTankDosage,
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
                 ),
               ],
@@ -263,7 +394,9 @@ class ResultScreen extends StatelessWidget {
             title: "Organic & Bio-Control Alternative",
             icon: Icons.eco,
             color: Colors.green.shade800,
-            content: prescription.organicTreatment,
+            content: _dbPrescription != null && _dbPrescription!.organicCure != 'None'
+                ? "${_dbPrescription!.organicCure}\n\n${_dbPrescription!.organicInstructionsMl}"
+                : prescription.organicTreatment,
           ),
 
           const SizedBox(height: 24),
