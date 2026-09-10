@@ -52,7 +52,8 @@ class TFLiteService {
 
   Future<Interpreter> _loadInterpreter(String assetPath) async {
     try {
-      return await Interpreter.fromAsset(assetPath);
+      final options = InterpreterOptions()..threads = 2;
+      return await Interpreter.fromAsset(assetPath, options: options);
     } catch (e) {
       debugPrint("Interpreter.fromAsset failed: $e. Loading via cached file...");
       final tempDir = Directory.systemTemp;
@@ -60,11 +61,18 @@ class TFLiteService {
       final modelFile = File('${tempDir.path}/$fileName');
       final byteData = await rootBundle.load(assetPath);
       await modelFile.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
-      return Interpreter.fromFile(modelFile);
+      final options = InterpreterOptions()..threads = 2;
+      return Interpreter.fromFile(modelFile, options: options);
     }
   }
 
-  Future<({File croppedImageFile, DiseasePrescription prescription})> processAndClassify(String imagePath) async {
+  Future<({
+    File croppedImageFile,
+    DiseasePrescription prescription,
+    bool isValidPlant,
+    int inferenceTimeMs,
+  })> processAndClassify(String imagePath) async {
+    final stopwatch = Stopwatch()..start();
     final rawBytes = await File(imagePath).readAsBytes();
     final originalImage = img.decodeImage(rawBytes);
 
@@ -72,20 +80,24 @@ class TFLiteService {
       throw Exception("Failed to decode captured camera image");
     }
 
-    // Center crop: extract the square matching the aiming reticle
-    final cropSize = (originalImage.width < originalImage.height ? originalImage.width : originalImage.height) * 0.7;
-    final x = ((originalImage.width - cropSize) / 2).round();
-    final y = ((originalImage.height - cropSize) / 2).round();
+    // 1. Correct camera EXIF rotation so portrait orientation matches screen viewfinder
+    final uprightImage = img.bakeOrientation(originalImage);
+
+    // 2. Center crop: extract the square region matching the viewfinder aiming reticle
+    final minDim = math.min(uprightImage.width, uprightImage.height);
+    final cropSize = (minDim * 0.65).round();
+    final cropX = ((uprightImage.width - cropSize) / 2).round();
+    final cropY = ((uprightImage.height - cropSize) / 2).round();
 
     final cropped = img.copyCrop(
-      originalImage,
-      x: x,
-      y: y,
-      width: cropSize.round(),
-      height: cropSize.round(),
+      uprightImage,
+      x: cropX,
+      y: cropY,
+      width: cropSize,
+      height: cropSize,
     );
 
-    // Resize to standard input tensor resolution (224x224)
+    // 3. Resize to standard CNN input tensor resolution (224x224)
     final resized = img.copyResize(cropped, width: 224, height: 224);
 
     final tempDir = Directory.systemTemp;
@@ -93,44 +105,102 @@ class TFLiteService {
     final croppedFile = File(croppedFilePath);
     await croppedFile.writeAsBytes(img.encodeJpg(resized, quality: 90));
 
+    // 4. Plant/Foliage Validation Pre-filter
+    // Sample a 56x56 grid (every 4th pixel) to detect vegetative foliage tones
+    int plantBiasedPixels = 0;
+    int totalSampled = 0;
+    for (int y = 0; y < 224; y += 4) {
+      for (int x = 0; x < 224; x += 4) {
+        final p = resized.getPixel(x, y);
+        totalSampled++;
+        // Foliage color signatures:
+        // a) Vibrant green: green dominates red and blue
+        final isGreen = p.g > p.r && p.g > (p.b * 0.85);
+        // b) Chlorotic leaf lesion: yellowish-green tone
+        final isChlorotic = (p.r + p.g) > (p.b * 1.5) && p.g > 45 && p.r > 35;
+        // c) Necrotic brown leaf spot: reddish-brown lesion
+        final isNecrotic = p.r > p.b && p.g > p.b && (p.r - p.b) > 15 && p.g > 25 && (p.r + p.g + p.b) < 600;
+
+        if (isGreen || isChlorotic || isNecrotic) {
+          plantBiasedPixels++;
+        }
+      }
+    }
+
+    final plantFraction = totalSampled > 0 ? plantBiasedPixels / totalSampled : 0.0;
+    // Tables, white notebook paper, keyboards typically have < 5-8% plant tones
+    final bool isValidPlant = plantFraction >= 0.10;
+
     if (_isModelLoaded && _interpreter != null) {
       try {
         final prescription = await _runTFLiteInference(resized);
-        return (croppedImageFile: croppedFile, prescription: prescription);
+        stopwatch.stop();
+        return (
+          croppedImageFile: croppedFile,
+          prescription: prescription,
+          isValidPlant: isValidPlant,
+          inferenceTimeMs: stopwatch.elapsedMilliseconds,
+        );
       } catch (inferenceError) {
         debugPrint("TFLite inference error: $inferenceError. Providing agronomy diagnosis.");
       }
     }
 
-    // Realistic offline edge simulation latency (~45ms)
-    await Future.delayed(const Duration(milliseconds: 50));
+    stopwatch.stop();
     final sample = DiseasePrescription.samplePrescriptions.first;
-    return (croppedImageFile: croppedFile, prescription: sample);
+    return (
+      croppedImageFile: croppedFile,
+      prescription: sample,
+      isValidPlant: isValidPlant,
+      inferenceTimeMs: stopwatch.elapsedMilliseconds,
+    );
   }
 
   Future<DiseasePrescription> _runTFLiteInference(img.Image image) async {
-    // Ultralytics YOLOv8-cls NCHW tensor: [1, 3, 224, 224], Float32 [0.0, 1.0]
-    final input = List.generate(
-      1,
-      (_) => List.generate(
-        3, // 0: Red, 1: Green, 2: Blue
-        (c) => List.generate(
-          224, // Height (y)
+    final inputTensors = _interpreter!.getInputTensors();
+    final inputShape = inputTensors.isNotEmpty ? inputTensors.first.shape : [1, 3, 224, 224];
+    final isNCHW = inputShape.length == 4 && inputShape[1] == 3;
+
+    dynamic input;
+    if (isNCHW) {
+      // NCHW tensor: [1, 3, 224, 224], Float32 [0.0, 1.0] (Ultralytics YOLOv8 export)
+      input = List.generate(
+        1,
+        (_) => List.generate(
+          3, // 0: R, 1: G, 2: B
+          (c) => List.generate(
+            224,
+            (y) => List.generate(
+              224,
+              (x) {
+                final pixel = image.getPixel(x, y);
+                final num val = (c == 0)
+                    ? pixel.r
+                    : (c == 1)
+                        ? pixel.g
+                        : pixel.b;
+                return val / 255.0;
+              },
+            ),
+          ),
+        ),
+      );
+    } else {
+      // NHWC tensor: [1, 224, 224, 3], Float32 [0.0, 1.0]
+      input = List.generate(
+        1,
+        (_) => List.generate(
+          224,
           (y) => List.generate(
-            224, // Width (x)
+            224,
             (x) {
               final pixel = image.getPixel(x, y);
-              final num val = (c == 0)
-                  ? pixel.r
-                  : (c == 1)
-                      ? pixel.g
-                      : pixel.b;
-              return val / 255.0;
+              return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
             },
           ),
         ),
-      ),
-    );
+      );
+    }
 
     final numClasses = _labels.isNotEmpty ? _labels.length : 10;
     final output = List.generate(1, (_) => List<double>.filled(numClasses, 0.0));
@@ -148,10 +218,19 @@ class TFLiteService {
       }
     }
 
-    // Softmax normalization for clean confidence output
-    final expList = rawScores.map((s) => math.exp(s - maxLogit)).toList();
-    final sumExp = expList.reduce((a, b) => a + b);
-    final confidence = sumExp > 0 ? expList[maxIndex] / sumExp : 0.95;
+    // Check if model already outputs Softmax probabilities (sum ~= 1.0)
+    // Applying Softmax twice compresses 95%+ confidence down to 20%-30%!
+    final sumRaw = rawScores.fold<double>(0.0, (sum, val) => sum + val);
+    double confidence;
+    if (sumRaw >= 0.85 && sumRaw <= 1.15) {
+      // Model output is already normalized probabilities
+      confidence = maxLogit.clamp(0.0, 1.0);
+    } else {
+      // Raw unnormalized logits: apply Softmax
+      final expList = rawScores.map((s) => math.exp(s - maxLogit)).toList();
+      final sumExp = expList.reduce((a, b) => a + b);
+      confidence = sumExp > 0 ? (expList[maxIndex] / sumExp).clamp(0.0, 1.0) : 0.95;
+    }
 
     final detectedLabel = (_labels.isNotEmpty && maxIndex < _labels.length)
         ? _labels[maxIndex]

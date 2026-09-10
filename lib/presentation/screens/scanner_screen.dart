@@ -106,6 +106,32 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
       if (!mounted) return;
 
+      // Guardrail: Reject non-crop items (books, tables, walls) or ambiguous scans
+      if (!result.isValidPlant || result.prescription.confidence < 0.60) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFB45309),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+            content: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.white, size: 22),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "ഇല വ്യക്തമല്ല (No plant leaf detected).\nPlease center the affected crop leaf within the reticle.",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
       await Navigator.push(
         context,
         MaterialPageRoute(
