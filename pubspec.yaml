@@ -17,9 +17,6 @@ dependencies:
   flutter_riverpod: ^3.4.3
   image: ^4.9.2
   tflite_flutter: ^0.12.1
-  sqflite: ^2.4.3
-  path: ^1.9.1
-  flutter_tts: ^4.2.5
 
   # SQLite Database & Storage
   sqflite: ^2.3.3+1
