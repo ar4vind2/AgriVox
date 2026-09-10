@@ -25,6 +25,7 @@ class _ResultScreenState extends State<ResultScreen> {
   Prescription? _dbPrescription;
   bool _isPlayingMalayalam = false;
   bool _isPlayingEnglish = false;
+  int _selectedTankVolume = 16;
 
   @override
   void initState() {
@@ -217,6 +218,57 @@ class _ResultScreenState extends State<ResultScreen> {
 
           const SizedBox(height: 16),
 
+          // Low-Confidence Diagnostic Guardrail Warning (<60%)
+          if (prescription.confidence < 0.60) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.amber.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Low-Confidence Scan (<60%)",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Color(0xFFB45309),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "The leaf lesion may be indistinct, poorly illuminated, or out of focus. Recommended: Wipe the camera lens, ensure bright diffuse lighting, hold the phone 15–20cm from the leaf, and re-scan for higher accuracy.",
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            height: 1.35,
+                            color: Colors.brown.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // Voice Copilot Audio Card (Offline Indic Malayalam & English TTS)
           Container(
             padding: const EdgeInsets.all(16),
@@ -337,7 +389,7 @@ class _ResultScreenState extends State<ResultScreen> {
 
           const SizedBox(height: 12),
 
-          // Spray Tank Dosage Calculator
+          // Spray Tank Dosage Calculator (Dynamic Knapsack Math: 10L, 12L, 16L, 20L)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -356,7 +408,7 @@ class _ResultScreenState extends State<ResultScreen> {
                         Icon(Icons.calculate, color: Colors.amber.shade900, size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          "Knapsack Tank Preparation (16L)",
+                          "Knapsack Tank Preparation (${_selectedTankVolume}L)",
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber.shade900),
                         ),
                       ],
@@ -376,11 +428,43 @@ class _ResultScreenState extends State<ResultScreen> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                // Interactive Tank Volume Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [10, 12, 16, 20].map((volume) {
+                      final isSelected = _selectedTankVolume == volume;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text("${volume}L Tank"),
+                          selected: isSelected,
+                          selectedColor: Colors.amber.shade200,
+                          backgroundColor: Colors.grey.shade100,
+                          side: BorderSide(
+                            color: isSelected ? Colors.amber.shade700 : Colors.grey.shade300,
+                          ),
+                          labelStyle: TextStyle(
+                            color: isSelected ? Colors.amber.shade900 : Colors.black87,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                          onSelected: (selected) {
+                            if (selected) {
+                              setState(() {
+                                _selectedTankVolume = volume;
+                              });
+                            }
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Text(
-                  _dbPrescription != null && _dbPrescription!.dosagePerLiter > 0
-                      ? "${(_dbPrescription!.dosagePerLiter * 16).toStringAsFixed(1)}g / ml of ${_dbPrescription!.chemicalCure} in 16L knapsack tank. (Concentration: ${_dbPrescription!.dosagePerLiter}g per liter)."
-                      : prescription.knapsackTankDosage,
+                  _getDosageText(prescription),
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
                 ),
               ],
@@ -456,5 +540,27 @@ class _ResultScreenState extends State<ResultScreen> {
         ],
       ),
     );
+  }
+
+  String _getDosageText(DiseasePrescription prescription) {
+    if (_dbPrescription != null && _dbPrescription!.dosagePerLiter > 0) {
+      final totalDosage = (_dbPrescription!.dosagePerLiter * _selectedTankVolume).toStringAsFixed(1);
+      return "$totalDosage g/ml of ${_dbPrescription!.chemicalCure} in ${_selectedTankVolume}L knapsack tank. (Concentration rate: ${_dbPrescription!.dosagePerLiter}g per liter).";
+    }
+
+    if (prescription.severity == SeverityLevel.healthy) {
+      return "No chemical application required. Maintain normal field irrigation.";
+    }
+
+    final match = RegExp(r'(\d+(\.\d+)?)').firstMatch(prescription.knapsackTankDosage);
+    if (match != null) {
+      final base16Val = double.tryParse(match.group(1)!);
+      if (base16Val != null) {
+        final scaled = ((base16Val / 16.0) * _selectedTankVolume).toStringAsFixed(1);
+        return "$scaled g in ${_selectedTankVolume}L knapsack sprayer tank. (Calculated dynamically for ${_selectedTankVolume}L capacity).";
+      }
+    }
+
+    return "${prescription.knapsackTankDosage} (Adjusted for ${_selectedTankVolume}L tank)";
   }
 }

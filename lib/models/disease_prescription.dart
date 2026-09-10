@@ -55,7 +55,10 @@ class DiseasePrescription {
       (entry) =>
           entry.key.toLowerCase() == cleanLabel ||
           cleanLabel.contains(entry.key.toLowerCase()),
-      orElse: () => prescriptionsMap.entries.first,
+      orElse: () => prescriptionsMap.entries.firstWhere(
+        (e) => e.key == 'unmapped_pathology',
+        orElse: () => prescriptionsMap.entries.first,
+      ),
     ).value;
 
     return match.copyWith(confidence: confidence);
@@ -252,6 +255,26 @@ class DiseasePrescription {
           'തക്കാളി ചെടി പൂർണ്ണ ആരോഗ്യത്തോടെ വളരുന്നു. രോഗബാധകൾ ഒന്നും കണ്ടെത്താനായില്ല.',
       englishAudioText:
           'Tomato crop is completely healthy with robust foliage.',
+    ),
+    'unmapped_pathology': const DiseasePrescription(
+      diseaseId: 'unmapped_pathology',
+      diseaseName: 'Unclassified Foliar Anomaly',
+      cropName: 'Field Crop',
+      scientificName: 'General Agronomic Assessment',
+      confidence: 0.50,
+      severity: SeverityLevel.moderate,
+      symptoms:
+          'Atypical foliar lesion or discoloration detected. Symptoms do not closely match the standard KAU pathology signatures in the edge model.',
+      chemicalTreatment:
+          'Avoid applying synthetic fungicides without positive pathogen identification. Consult your local Krishi Bhavan or KAU Extension Officer.',
+      organicTreatment:
+          'Spray 1% Bordeaux mixture or Pseudomonas fluorescens (20g/L) as a broad-spectrum prophylactic measure. Remove and destroy heavily infected leaves.',
+      knapsackTankDosage:
+          '160g Copper Sulphate + 160g Quicklime in 16L water for 1% Bordeaux mixture.',
+      malayalamAudioText:
+          'രോഗലക്ഷണം വ്യക്തമായി തിരിച്ചറിയാൻ കഴിഞ്ഞിട്ടില്ല. അനാവശ്യ കീടനാശിനികൾ ഒഴിവാക്കി കൃഷിഭവൻ ഉദ്യോഗസ്ഥരുമായി ബന്ധപ്പെടുക.',
+      englishAudioText:
+          'Unclassified foliar anomaly detected. Avoid indiscriminate spraying and consult local agricultural extension officer.',
     ),
   };
 
