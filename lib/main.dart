@@ -1,28 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'presentation/screens/dashboard_screen.dart';
-import 'services/tflite_service.dart';
+import 'presentation/screens/splash_screen.dart';
 
-List<CameraDescription> cameras = [];
-
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Permission.camera.request();
-  try {
-    cameras = await availableCameras();
-  } catch (e) {
-    debugPrint("Failed to get available cameras: $e");
-  }
-
-  // Initialize TFLite interpreter / labels if assets are present
-  await TFLiteService().initialize();
-
   runApp(const AgriVoxApp());
 }
 
 class AgriVoxApp extends StatelessWidget {
-  const AgriVoxApp({super.key});
+  final Widget? home;
+  const AgriVoxApp({super.key, this.home});
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +23,7 @@ class AgriVoxApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFF6F8F5),
       ),
-      home: DashboardScreen(cameras: cameras),
+      home: home ?? const SplashScreen(),
     );
   }
 }
