@@ -14,13 +14,14 @@ class DashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.green.shade800,
-                borderRadius: BorderRadius.circular(8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/icon/app_icon.png',
+                width: 30,
+                height: 30,
+                fit: BoxFit.cover,
               ),
-              child: const Icon(Icons.eco, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 10),
             const Text(

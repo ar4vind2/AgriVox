@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/disease_prescription.dart';
-import '../../repositories/prescription_repository.dart';
+import '../../services/prescription_repository.dart';
 import '../../services/voice_service.dart';
 
 class ResultScreen extends StatefulWidget {
