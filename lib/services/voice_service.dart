@@ -11,8 +11,10 @@ class VoiceService {
   Future<void> init() async {
     if (_isInitialized) return;
 
-    // Configure default language for Malayalam (India)
+    // Configure language for Malayalam (India)
     await _flutterTts.setLanguage("ml-IN");
+    
+    // 0.40 - 0.45 provides a clear, natural cadence for regional audio instructions
     await _flutterTts.setSpeechRate(0.42);
     await _flutterTts.setPitch(1.0);
     await _flutterTts.setVolume(1.0);
@@ -65,4 +67,4 @@ class VoiceService {
   Future<void> stop() async {
     await _flutterTts.stop();
   }
-}
+}
