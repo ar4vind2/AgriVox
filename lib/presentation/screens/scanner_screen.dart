@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../../services/tflite_service.dart';
+import '../widgets/animated_pulse_logo.dart';
 import '../widgets/reticle_overlay.dart';
 import 'result_screen.dart';
 
@@ -104,6 +105,32 @@ class _ScannerScreenState extends State<ScannerScreen> {
       });
 
       if (!mounted) return;
+
+      // Guardrail: Reject non-crop items (books, tables, walls) or ambiguous scans
+      if (!result.isValidPlant || result.prescription.confidence < 0.60) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFB45309),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+            content: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.white, size: 22),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "ഇല വ്യക്തമല്ല (No plant leaf detected).\nPlease center the affected crop leaf within the reticle.",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
 
       await Navigator.push(
         context,
@@ -209,32 +236,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
             right: 0,
             child: Center(
               child: _isAnalyzing
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.85),
-                        borderRadius: BorderRadius.circular(30),
-                        border: Border.all(color: Colors.greenAccent),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.greenAccent,
-                            ),
-                          ),
-                          SizedBox(width: 14),
-                          Text(
-                            "Analyzing lesion on-device...",
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    )
+                  ? const SizedBox.shrink()
                   : GestureDetector(
                       onTap: _captureAndAnalyze,
                       child: Container(
@@ -256,6 +258,86 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     ),
             ),
           ),
+
+          // High-Tech Analyzing HUD Overlay
+          if (_isAnalyzing)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.78),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const AnimatedPulseLogo(
+                          size: 76,
+                          showRings: true,
+                          showReticle: true,
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0xFF22C55E).withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 8,
+                                height: 8,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFF4ADE80),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                "NEURAL EDGE-DIAGNOSTIC",
+                                style: TextStyle(
+                                  color: Color(0xFF4ADE80),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                  letterSpacing: 1.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          "Analyzing Lesion On-Device...",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 19,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Running YOLOv8n-cls INT8 Inference\nExtracting KAU agronomy recommendations",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.68),
+                            fontSize: 12.5,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

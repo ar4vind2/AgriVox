@@ -14,13 +14,14 @@ class DashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.green.shade800,
-                borderRadius: BorderRadius.circular(8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/icon/app_icon.png',
+                width: 30,
+                height: 30,
+                fit: BoxFit.cover,
               ),
-              child: const Icon(Icons.eco, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 10),
             const Text(
@@ -185,13 +186,11 @@ class DashboardScreen extends StatelessWidget {
           // Crop Badges Grid
           Row(
             children: [
-              _buildCropCard("Rubber", "റബ്ബർ", Icons.forest, Colors.teal),
+              _buildCropCard("Tomato", "തക്കാളി", Icons.circle, Colors.red.shade700),
               const SizedBox(width: 10),
-              _buildCropCard("Pepper", "കുരുമുളക്", Icons.grain, Colors.deepOrange),
+              _buildCropCard("Potato", "ഉരുളക്കിഴങ്ങ്", Icons.grass, Colors.brown.shade600),
               const SizedBox(width: 10),
-              _buildCropCard("Tomato", "തക്കാളി", Icons.egg, Colors.red),
-              const SizedBox(width: 10),
-              _buildCropCard("Cardamom", "ഏലം", Icons.spa, Colors.green),
+              _buildCropCard("Bell Pepper", "കാപ്സിക്കം", Icons.spa, Colors.deepOrange.shade600),
             ],
           ),
 
