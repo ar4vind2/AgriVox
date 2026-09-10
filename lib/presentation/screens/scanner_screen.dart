@@ -107,7 +107,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
       if (!mounted) return;
 
       // Guardrail: Reject non-crop items (books, tables, walls) or ambiguous scans
-      if (!result.isValidPlant || result.prescription.confidence < 0.60) {
+      if (!result.isValidPlant || result.prescription.confidence < 0.65) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFFB45309),

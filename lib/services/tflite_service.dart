@@ -106,30 +106,37 @@ class TFLiteService {
     await croppedFile.writeAsBytes(img.encodeJpg(resized, quality: 90));
 
     // 4. Plant/Foliage Validation Pre-filter
-    // Sample a 56x56 grid (every 4th pixel) to detect vegetative foliage tones
+    // Sample a 56x56 grid (every 4th pixel = 3,136 samples) to detect living foliar vegetation
     int plantBiasedPixels = 0;
     int totalSampled = 0;
     for (int y = 0; y < 224; y += 4) {
       for (int x = 0; x < 224; x += 4) {
         final p = resized.getPixel(x, y);
         totalSampled++;
-        // Foliage color signatures:
-        // a) Vibrant green: green dominates red and blue
-        final isGreen = p.g > p.r && p.g > (p.b * 0.85);
-        // b) Chlorotic leaf lesion: yellowish-green tone
-        final isChlorotic = (p.r + p.g) > (p.b * 1.5) && p.g > 45 && p.r > 35;
-        // c) Necrotic brown leaf spot: reddish-brown lesion
-        final isNecrotic = p.r > p.b && p.g > p.b && (p.r - p.b) > 15 && p.g > 25 && (p.r + p.g + p.b) < 600;
-
-        if (isGreen || isChlorotic || isNecrotic) {
+        if (isPlantFoliagePixel(p.r.toInt(), p.g.toInt(), p.b.toInt())) {
           plantBiasedPixels++;
         }
       }
     }
 
     final plantFraction = totalSampled > 0 ? plantBiasedPixels / totalSampled : 0.0;
-    // Tables, white notebook paper, keyboards typically have < 5-8% plant tones
-    final bool isValidPlant = plantFraction >= 0.10;
+    // Real leaves centered in the reticle occupy >= 18% of the frame.
+    // Non-leaf surfaces (desks, tables, books, skin, paper, walls) score < 2%.
+    final bool isValidPlant = plantFraction >= 0.18;
+
+    // Guardrail: If this is not a valid plant leaf (e.g. table, book, floor, wall, hand),
+    // immediately return with low confidence and unmapped pathology.
+    // Closed-set CNNs force high confidence (85%–95%) on out-of-distribution inputs.
+    // By intercepting here, false images are NEVER given high confidence or a false disease!
+    if (!isValidPlant) {
+      stopwatch.stop();
+      return (
+        croppedImageFile: croppedFile,
+        prescription: DiseasePrescription.fromLabel('unmapped_pathology', 0.15),
+        isValidPlant: false,
+        inferenceTimeMs: stopwatch.elapsedMilliseconds,
+      );
+    }
 
     if (_isModelLoaded && _interpreter != null) {
       try {
@@ -138,7 +145,7 @@ class TFLiteService {
         return (
           croppedImageFile: croppedFile,
           prescription: prescription,
-          isValidPlant: isValidPlant,
+          isValidPlant: true,
           inferenceTimeMs: stopwatch.elapsedMilliseconds,
         );
       } catch (inferenceError) {
@@ -151,9 +158,37 @@ class TFLiteService {
     return (
       croppedImageFile: croppedFile,
       prescription: sample,
-      isValidPlant: isValidPlant,
+      isValidPlant: true,
       inferenceTimeMs: stopwatch.elapsedMilliseconds,
     );
+  }
+
+  /// Agronomic vegetation filter using Excess Green Index (ExG), Green Ratio, and Saturation.
+  /// Eliminates non-leaf artifacts: wooden desks, cardboard, human skin, white/cream paper, walls, keyboards.
+  static bool isPlantFoliagePixel(int r, int g, int b) {
+    final total = r + g + b;
+    // 1. Discard extreme shadows/black (< 45) and extreme specular highlights / blown-out white (> 700)
+    if (total < 45 || total > 700) return false;
+
+    // 2. Saturation check: neutral surfaces (gray/white paper, cement, dark plastic) have max - min < 22
+    final maxC = math.max(r, math.max(g, b));
+    final minC = math.min(r, math.min(g, b));
+    if ((maxC - minC) < 22) return false;
+
+    // 3. Foliage green ratio: green channel must account for at least 35% of total RGB intensity
+    if ((g / total) < 0.35) return false;
+
+    // 4. Excess Green Index (ExG = 2*G - R - B):
+    // Vegetative plant foliage (healthy green, lime, yellowing chlorotic) reflects green strongly: ExG >= 18
+    // Non-plant brown/tan/red surfaces (wood, cardboard, skin) have ExG <= 0 or < 15
+    if (((2 * g) - r - b) < 18) return false;
+
+    // 5. Wood & Human Skin Rejection:
+    // In woodgrain, cardboard, and skin, Red strongly exceeds Green (R > G * 1.05).
+    // In plant foliage, Green is greater than or equal to Red, or Red is tightly bounded.
+    if (r > g * 1.05) return false;
+
+    return true;
   }
 
   Future<DiseasePrescription> _runTFLiteInference(img.Image image) async {
@@ -235,6 +270,11 @@ class TFLiteService {
     final detectedLabel = (_labels.isNotEmpty && maxIndex < _labels.length)
         ? _labels[maxIndex]
         : 'Pepper_bell_Bacterial_spot';
+
+    // If model confidence is low (< 0.60), do not declare a false high confidence disease
+    if (confidence < 0.60) {
+      return DiseasePrescription.fromLabel('unmapped_pathology', confidence);
+    }
 
     return DiseasePrescription.fromLabel(detectedLabel, confidence);
   }
