@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/disease_prescription.dart';
 import '../../services/prescription_repository.dart';
+import '../../services/dosage_calculator.dart';
 import '../../services/voice_service.dart';
 
 class ResultScreen extends StatefulWidget {
@@ -536,11 +537,48 @@ class _ResultScreenState extends State<ResultScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Interactive Tank Volume Chips
+                // Tank Volume Slider with live indicator
+                Row(
+                  children: [
+                    Text(
+                      "Volume: ",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey.shade800),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: _selectedTankVolume.toDouble(),
+                        min: 5,
+                        max: 25,
+                        divisions: 20,
+                        activeColor: Colors.amber.shade800,
+                        inactiveColor: Colors.amber.shade100,
+                        label: "${_selectedTankVolume}L",
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedTankVolume = val.round();
+                          });
+                        },
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        "$_selectedTankVolume L",
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber.shade900),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Quick-select preset Tank Volume Chips
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: [10, 12, 16, 20].map((volume) {
+                    children: [8, 10, 12, 16, 20].map((volume) {
                       final isSelected = _selectedTankVolume == volume;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -570,9 +608,18 @@ class _ResultScreenState extends State<ResultScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  _getDosageText(prescription),
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade200),
+                  ),
+                  child: Text(
+                    _getDosageText(prescription),
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Colors.black87, height: 1.35),
+                  ),
                 ),
               ],
             ),
@@ -651,8 +698,12 @@ class _ResultScreenState extends State<ResultScreen> {
 
   String _getDosageText(DiseasePrescription prescription) {
     if (_dbPrescription != null && _dbPrescription!.dosagePerLiter > 0) {
-      final totalDosage = (_dbPrescription!.dosagePerLiter * _selectedTankVolume).toStringAsFixed(1);
-      return "$totalDosage g/ml of ${_dbPrescription!.chemicalCure} in ${_selectedTankVolume}L knapsack tank. (Concentration rate: ${_dbPrescription!.dosagePerLiter}g per liter).";
+      final calc = DosageCalculator.calculateByTankVolume(
+        tankVolumeLiters: _selectedTankVolume.toDouble(),
+        dosagePerLiter: _dbPrescription!.dosagePerLiter,
+        chemicalName: _dbPrescription!.chemicalCure,
+      );
+      return "${calc.dosageSummaryMl}\n(Concentration: ${_dbPrescription!.dosagePerLiter}g/L • Total required: ${calc.totalProductGramsOrMl.toStringAsFixed(1)} ${calc.unit})";
     }
 
     if (prescription.severity == SeverityLevel.healthy) {
