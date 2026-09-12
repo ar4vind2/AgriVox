@@ -6,6 +6,7 @@ import 'package:agrivox/presentation/screens/dashboard_screen.dart';
 import 'package:agrivox/presentation/widgets/animated_pulse_logo.dart';
 import 'package:agrivox/services/dosage_calculator.dart';
 import 'package:agrivox/services/tflite_service.dart';
+import 'package:agrivox/services/voice_service.dart';
 
 void main() {
   testWidgets('AgriVoxApp smoke test - DashboardScreen direct', (WidgetTester tester) async {
@@ -124,6 +125,17 @@ void main() {
     expect(smallTank.totalWaterLiters, 10.0);
     expect(smallTank.totalProductGramsOrMl, 25.0);
 
+    // 14L tank with 1.5g/L dosage
+    final medTank = DosageCalculator.calculateByTankVolume(
+      tankVolumeLiters: 14.0,
+      dosagePerLiter: 1.5,
+      chemicalName: 'Dimethoate 30 EC',
+      isLiquid: true,
+    );
+    expect(medTank.totalWaterLiters, 14.0);
+    expect(medTank.totalProductGramsOrMl, 21.0);
+    expect(medTank.unit, 'ml');
+
     // Land area calculation: 10 cents plot
     final areaResult = DosageCalculator.calculateByAreaInCents(
       cents: 10.0,
@@ -134,6 +146,25 @@ void main() {
     expect(areaResult.totalWaterLiters, 15.0);
     expect(areaResult.totalProductGramsOrMl, 30.0);
     expect(areaResult.dosageSummaryMl.contains('10.0 സെന്റ്'), isTrue);
+  });
+
+  test('Background_Noise non-plant guardrail prescription resolution tests', () {
+    final bg = DiseasePrescription.fromLabel('Background_Noise', 0.15);
+    expect(bg.diseaseId, 'Background_Noise');
+    expect(bg.cropName, 'Non-Crop Surface');
+    expect(bg.malayalamAudioText.contains('ചെടിയുടെ ഇല കണ്ടെത്താനായില്ല'), isTrue);
+    expect(bg.confidence <= 0.20, isTrue);
+
+    // Direct check in prescriptionsMap
+    expect(DiseasePrescription.prescriptionsMap.containsKey('Background_Noise'), isTrue);
+    expect(DiseasePrescription.prescriptionsMap.containsKey('unmapped_pathology'), isTrue);
+  });
+
+  test('VoiceService singleton provides offline speaking state tracking', () {
+    final vs1 = VoiceService();
+    final vs2 = VoiceService();
+    expect(identical(vs1, vs2), isTrue);
+    expect(vs1.isSpeaking, isFalse);
   });
 
   test('Local Kerala crops KAU prescriptions resolution tests', () {

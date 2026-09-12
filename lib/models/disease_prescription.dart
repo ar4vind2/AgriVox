@@ -547,6 +547,24 @@ class DiseasePrescription {
       englishAudioText:
           'Tomato crop is completely healthy with robust foliage.',
     ),
+    'Background_Noise': const DiseasePrescription(
+      diseaseId: 'Background_Noise',
+      diseaseName: 'Non-Plant / Background Surface',
+      cropName: 'Non-Crop Surface',
+      scientificName: 'Non-Biological Surface',
+      confidence: 0.15,
+      severity: SeverityLevel.mild,
+      symptoms:
+          'No crop leaf lesion detected. The camera is pointing at an artificial surface, furniture, book, wall, or hand.',
+      chemicalTreatment: 'No chemical treatment required.',
+      organicTreatment:
+          'Aim the viewfinder reticle directly at a live crop leaf under good natural lighting.',
+      knapsackTankDosage: 'None. Please re-scan a plant leaf.',
+      malayalamAudioText:
+          'ചെടിയുടെ ഇല കണ്ടെത്താനായില്ല. ദയവായി ക്യാമറ ഇലയിലേക്ക് തിരിച്ച് വീണ്ടും സ്കാൻ ചെയ്യുക.',
+      englishAudioText:
+          'Non-plant surface detected. Please focus the camera squarely on a crop leaf and scan again.',
+    ),
     'unmapped_pathology': const DiseasePrescription(
       diseaseId: 'unmapped_pathology',
       diseaseName: 'Unclassified Foliar Anomaly',

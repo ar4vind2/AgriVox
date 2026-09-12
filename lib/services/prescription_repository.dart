@@ -69,7 +69,7 @@ class PrescriptionRepository {
         final countResult = await existingDb.rawQuery('SELECT COUNT(*) as count FROM Prescriptions');
         final currentCount = Sqflite.firstIntValue(countResult) ?? 0;
         await existingDb.close();
-        if (currentCount < 25) {
+        if (currentCount < 27) {
           ByteData data = await rootBundle.load("assets/database/agronomy_prescriptions.db");
           List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
           await File(dbPath).writeAsBytes(bytes, flush: true);
@@ -96,6 +96,24 @@ class PrescriptionRepository {
     if (results.isNotEmpty) {
       return Prescription.fromMap(results.first);
     }
+
+    // Friendly fallback for non-plant surfaces or unclassified symptoms
+    final fallbackKey = (diseaseKey.toLowerCase().contains('noise') ||
+            diseaseKey.toLowerCase().contains('background'))
+        ? 'Background_Noise'
+        : 'unmapped_pathology';
+
+    final List<Map<String, dynamic>> fallbackResults = await db.query(
+      'Prescriptions',
+      where: 'disease_key = ?',
+      whereArgs: [fallbackKey],
+      limit: 1,
+    );
+
+    if (fallbackResults.isNotEmpty) {
+      return Prescription.fromMap(fallbackResults.first);
+    }
+
     return null;
   }
 }

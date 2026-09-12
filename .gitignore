@@ -3,6 +3,7 @@
 *.log
 *.pyc
 *.swp
+/agronomy_prescriptions.db
 .DS_Store
 .atom/
 .build/
