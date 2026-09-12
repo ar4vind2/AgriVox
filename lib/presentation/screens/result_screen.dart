@@ -40,9 +40,20 @@ class _ResultScreenState extends State<ResultScreen> {
     _activePrescription = widget.prescription;
     _currentCrop = widget.initialCrop ?? 'All';
     if (_currentCrop == 'All') {
-      if (_activePrescription.cropName.toLowerCase().contains('pepper')) {
+      final cn = _activePrescription.cropName.toLowerCase();
+      if (cn.contains('paddy') || cn.contains('rice') || cn.contains('നെല്ല്')) {
+        _currentCrop = 'Paddy';
+      } else if (cn.contains('coconut') || cn.contains('തെങ്ങ്')) {
+        _currentCrop = 'Coconut';
+      } else if (cn.contains('banana') || cn.contains('വാഴ')) {
+        _currentCrop = 'Banana';
+      } else if (cn.contains('brinjal') || cn.contains('eggplant') || cn.contains('വഴുതന')) {
+        _currentCrop = 'Brinjal';
+      } else if (cn.contains('okra') || cn.contains('ladies') || cn.contains('വെണ്ട')) {
+        _currentCrop = 'Okra';
+      } else if (cn.contains('pepper') || cn.contains('capsicum') || cn.contains('കാപ്സിക്കം')) {
         _currentCrop = 'Pepper';
-      } else if (_activePrescription.cropName.toLowerCase().contains('potato')) {
+      } else if (cn.contains('potato') || cn.contains('ഉരുളക്കിഴങ്ങ്')) {
         _currentCrop = 'Potato';
       } else {
         _currentCrop = 'Tomato';
@@ -110,9 +121,20 @@ class _ResultScreenState extends State<ResultScreen> {
     }
 
     String fallbackLabel;
-    if (cropKey.toLowerCase() == 'pepper') {
+    final lowerKey = cropKey.toLowerCase();
+    if (lowerKey == 'paddy' || lowerKey == 'rice') {
+      fallbackLabel = 'Rice_Blast';
+    } else if (lowerKey == 'coconut') {
+      fallbackLabel = 'Coconut_Bud_Rot';
+    } else if (lowerKey == 'banana') {
+      fallbackLabel = 'Banana_Sigatoka_Leaf_Spot';
+    } else if (lowerKey == 'brinjal' || lowerKey == 'eggplant') {
+      fallbackLabel = 'Brinjal_Bacterial_Wilt';
+    } else if (lowerKey == 'okra' || lowerKey.contains('ladies')) {
+      fallbackLabel = 'Okra_Yellow_Vein_Mosaic';
+    } else if (lowerKey == 'pepper') {
       fallbackLabel = 'Pepper_bell_Bacterial_spot';
-    } else if (cropKey.toLowerCase() == 'potato') {
+    } else if (lowerKey == 'potato') {
       fallbackLabel = 'Potato_Early_blight';
     } else {
       fallbackLabel = 'Tomato_Early_blight';
@@ -323,6 +345,16 @@ class _ResultScreenState extends State<ResultScreen> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
+                      _buildCropSwitchChip('Paddy', '🌾 Paddy (നെല്ല്)'),
+                      const SizedBox(width: 8),
+                      _buildCropSwitchChip('Coconut', '🥥 Coconut (തെങ്ങ്)'),
+                      const SizedBox(width: 8),
+                      _buildCropSwitchChip('Banana', '🍌 Banana (വാഴ)'),
+                      const SizedBox(width: 8),
+                      _buildCropSwitchChip('Brinjal', '🍆 Brinjal (വഴുതന)'),
+                      const SizedBox(width: 8),
+                      _buildCropSwitchChip('Okra', '🥬 Okra (വെണ്ട)'),
+                      const SizedBox(width: 8),
                       _buildCropSwitchChip('Pepper', '🌶️ Bell Pepper (കാപ്സിക്കം)'),
                       const SizedBox(width: 8),
                       _buildCropSwitchChip('Tomato', '🍅 Tomato (തക്കാളി)'),

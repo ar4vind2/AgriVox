@@ -57,12 +57,28 @@ class PrescriptionRepository {
     var dbDir = await getDatabasesPath();
     var dbPath = join(dbDir, "agronomy_prescriptions.db");
 
-    // Copy SQLite database from Flutter asset bundle to device filesystem on first launch
+    // Copy SQLite database from Flutter asset bundle to device filesystem on first launch or update
     bool exists = await databaseExists(dbPath);
     if (!exists) {
       ByteData data = await rootBundle.load("assets/database/agronomy_prescriptions.db");
       List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       await File(dbPath).writeAsBytes(bytes, flush: true);
+    } else {
+      try {
+        final existingDb = await openDatabase(dbPath, readOnly: true);
+        final countResult = await existingDb.rawQuery('SELECT COUNT(*) as count FROM Prescriptions');
+        final currentCount = Sqflite.firstIntValue(countResult) ?? 0;
+        await existingDb.close();
+        if (currentCount < 25) {
+          ByteData data = await rootBundle.load("assets/database/agronomy_prescriptions.db");
+          List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+          await File(dbPath).writeAsBytes(bytes, flush: true);
+        }
+      } catch (_) {
+        ByteData data = await rootBundle.load("assets/database/agronomy_prescriptions.db");
+        List<int> bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        await File(dbPath).writeAsBytes(bytes, flush: true);
+      }
     }
 
     return await openDatabase(dbPath, readOnly: true);

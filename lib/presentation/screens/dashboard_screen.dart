@@ -168,26 +168,46 @@ class DashboardScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                "Supported Crops (KAU Dataset)",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+              Expanded(
+                child: Text(
+                  "Supported Crops",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                ),
               ),
-              Text(
-                "10 Classes",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.green.shade700),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade300),
+                ),
+                child: Text(
+                  "8 Crops • 25 Prescriptions",
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade800),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
 
-          // Crop Badges Grid
-          Row(
+          // 8-Crop Badges Grid (Paddy, Coconut, Banana, Brinjal, Okra, Pepper, Tomato, Potato)
+          GridView.count(
+            crossAxisCount: 4,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.88,
             children: [
-              _buildCropCard(context, "Tomato", "തക്കാളി", Icons.circle, Colors.red.shade700, "Tomato"),
-              const SizedBox(width: 10),
-              _buildCropCard(context, "Potato", "ഉരുളക്കിഴങ്ങ്", Icons.grass, Colors.brown.shade600, "Potato"),
-              const SizedBox(width: 10),
-              _buildCropCard(context, "Bell Pepper", "കാപ്സിക്കം", Icons.spa, Colors.deepOrange.shade600, "Pepper"),
+              _buildCropGridItem(context, "Paddy", "നെല്ല്", "🌾", "Paddy"),
+              _buildCropGridItem(context, "Coconut", "തെങ്ങ്", "🥥", "Coconut"),
+              _buildCropGridItem(context, "Banana", "വാഴ", "🍌", "Banana"),
+              _buildCropGridItem(context, "Brinjal", "വഴുതന", "🍆", "Brinjal"),
+              _buildCropGridItem(context, "Okra", "വെണ്ട", "🥬", "Okra"),
+              _buildCropGridItem(context, "Pepper", "കാപ്സിക്കം", "🌶️", "Pepper"),
+              _buildCropGridItem(context, "Tomato", "തക്കാളി", "🍅", "Tomato"),
+              _buildCropGridItem(context, "Potato", "ഉരുളക്കിഴങ്ങ്", "🥔", "Potato"),
             ],
           ),
 
@@ -215,10 +235,10 @@ class DashboardScreen extends StatelessWidget {
                   ],
                 ),
                 const Divider(height: 20),
-                _buildSpecRow("Vision Architecture", "YOLOv8n-cls (INT8 Quantized)"),
+                _buildSpecRow("Vision Architecture", "Dual-Engine: YOLOv8n-cls + KAU Dual-Mode"),
                 _buildSpecRow("Input Tensor Resolution", "224 × 224 × 3 (Center-crop)"),
                 _buildSpecRow("Average Latency", "<40 ms (Offline CPU/GPU)"),
-                _buildSpecRow("Agronomy Database", "KAU Package of Practices 2024"),
+                _buildSpecRow("Agronomy Database", "KAU Package of Practices (25 Classes)"),
                 _buildSpecRow("Voice Engine", "Indic Malayalam / English TTS"),
               ],
             ),
@@ -228,45 +248,55 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCropCard(
+  Widget _buildCropGridItem(
     BuildContext context,
     String titleEn,
     String titleMl,
-    IconData icon,
-    Color color,
+    String emoji,
     String cropKey,
   ) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ScannerScreen(
-                  cameras: cameras,
-                  initialCrop: cropKey,
-                ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ScannerScreen(
+                cameras: cameras,
+                initialCrop: cropKey,
               ),
-            );
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
             ),
-            child: Column(
-              children: [
-                Icon(icon, color: color, size: 24),
-                const SizedBox(height: 6),
-                Text(titleEn, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                Text(titleMl, style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
-              ],
-            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 22)),
+              const SizedBox(height: 4),
+              Text(
+                titleEn,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+              Text(
+                titleMl,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 9.5),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ),
       ),

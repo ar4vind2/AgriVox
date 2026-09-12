@@ -135,4 +135,51 @@ void main() {
     expect(areaResult.totalProductGramsOrMl, 30.0);
     expect(areaResult.dosageSummaryMl.contains('10.0 സെന്റ്'), isTrue);
   });
+
+  test('Local Kerala crops KAU prescriptions resolution tests', () {
+    // Paddy / Rice Blast
+    final blast = DiseasePrescription.fromLabel('Rice_Blast', 0.95);
+    expect(blast.diseaseId, 'Rice_Blast');
+    expect(blast.cropName.contains('Paddy'), isTrue);
+    expect(blast.chemicalTreatment.contains('Tricyclazole'), isTrue);
+    expect(blast.malayalamAudioText.contains('ബ്ലാസ്റ്റ്'), isTrue);
+
+    // Coconut Bud Rot
+    final budRot = DiseasePrescription.fromLabel('Coconut_Bud_Rot', 0.94);
+    expect(budRot.diseaseId, 'Coconut_Bud_Rot');
+    expect(budRot.cropName.contains('Coconut'), isTrue);
+    expect(budRot.chemicalTreatment.contains('Bordeaux'), isTrue);
+
+    // Banana Sigatoka
+    final sigatoka = DiseasePrescription.fromLabel('Banana_Sigatoka_Leaf_Spot', 0.93);
+    expect(sigatoka.diseaseId, 'Banana_Sigatoka_Leaf_Spot');
+    expect(sigatoka.cropName.contains('Banana'), isTrue);
+    expect(sigatoka.chemicalTreatment.contains('Mancozeb'), isTrue);
+
+    // Brinjal Bacterial Wilt
+    final brinjalWilt = DiseasePrescription.fromLabel('Brinjal_Bacterial_Wilt', 0.95);
+    expect(brinjalWilt.diseaseId, 'Brinjal_Bacterial_Wilt');
+    expect(brinjalWilt.cropName.contains('Brinjal'), isTrue);
+    expect(brinjalWilt.chemicalTreatment.contains('Copper Oxychloride'), isTrue);
+
+    // Okra Yellow Vein Mosaic
+    final okraMosaic = DiseasePrescription.fromLabel('Okra_Yellow_Vein_Mosaic', 0.96);
+    expect(okraMosaic.diseaseId, 'Okra_Yellow_Vein_Mosaic');
+    expect(okraMosaic.cropName.contains('Okra'), isTrue);
+    expect(okraMosaic.chemicalTreatment.contains('Dimethoate'), isTrue);
+  });
+
+  testWidgets('Dashboard renders all 8 Kerala and Solanaceae crops', (WidgetTester tester) async {
+    await tester.pumpWidget(const AgriVoxApp(home: DashboardScreen(cameras: [])));
+
+    expect(find.text('Paddy'), findsOneWidget);
+    expect(find.text('Coconut'), findsOneWidget);
+    expect(find.text('Banana'), findsOneWidget);
+    expect(find.text('Brinjal'), findsOneWidget);
+    expect(find.text('Okra'), findsOneWidget);
+    expect(find.text('Pepper'), findsOneWidget);
+    expect(find.text('Tomato'), findsOneWidget);
+    expect(find.text('Potato'), findsOneWidget);
+    expect(find.text('8 Crops • 25 Prescriptions'), findsOneWidget);
+  });
 }
