@@ -7,11 +7,15 @@ import '../../services/voice_service.dart';
 class ResultScreen extends StatefulWidget {
   final File croppedImage;
   final DiseasePrescription prescription;
+  final Map<String, double>? classProbabilities;
+  final String? initialCrop;
 
   const ResultScreen({
     super.key,
     required this.croppedImage,
     required this.prescription,
+    this.classProbabilities,
+    this.initialCrop,
   });
 
   @override
@@ -22,6 +26,8 @@ class _ResultScreenState extends State<ResultScreen> {
   final VoiceService _voiceService = VoiceService();
   final PrescriptionRepository _repository = PrescriptionRepository();
 
+  late DiseasePrescription _activePrescription;
+  late String _currentCrop;
   Prescription? _dbPrescription;
   bool _isPlayingMalayalam = false;
   bool _isPlayingEnglish = false;
@@ -30,6 +36,17 @@ class _ResultScreenState extends State<ResultScreen> {
   @override
   void initState() {
     super.initState();
+    _activePrescription = widget.prescription;
+    _currentCrop = widget.initialCrop ?? 'All';
+    if (_currentCrop == 'All') {
+      if (_activePrescription.cropName.toLowerCase().contains('pepper')) {
+        _currentCrop = 'Pepper';
+      } else if (_activePrescription.cropName.toLowerCase().contains('potato')) {
+        _currentCrop = 'Potato';
+      } else {
+        _currentCrop = 'Tomato';
+      }
+    }
     _initServices();
   }
 
@@ -44,8 +61,12 @@ class _ResultScreenState extends State<ResultScreen> {
       }
     });
 
+    await _loadDbPrescription(_activePrescription.diseaseId);
+  }
+
+  Future<void> _loadDbPrescription(String diseaseId) async {
     try {
-      final dbResult = await _repository.getPrescription(widget.prescription.diseaseId);
+      final dbResult = await _repository.getPrescription(diseaseId);
       if (mounted) {
         setState(() {
           _dbPrescription = dbResult;
@@ -54,6 +75,52 @@ class _ResultScreenState extends State<ResultScreen> {
     } catch (e) {
       debugPrint("SQLite DB lookup error: $e");
     }
+  }
+
+  Future<void> _switchCrop(String cropKey) async {
+    if (_currentCrop.toLowerCase() == cropKey.toLowerCase()) return;
+    await _voiceService.stop();
+
+    setState(() {
+      _isPlayingMalayalam = false;
+      _isPlayingEnglish = false;
+      _currentCrop = cropKey;
+    });
+
+    final probs = widget.classProbabilities;
+    if (probs != null && probs.isNotEmpty) {
+      final candidateEntries = probs.entries
+          .where((e) => e.key.toLowerCase().contains(cropKey.toLowerCase()))
+          .toList();
+
+      if (candidateEntries.isNotEmpty) {
+        candidateEntries.sort((a, b) => b.value.compareTo(a.value));
+        final best = candidateEntries.first;
+        final sumCrop = candidateEntries.fold<double>(0.0, (sum, e) => sum + e.value);
+        final normalizedConf = sumCrop > 0 ? (best.value / sumCrop).clamp(0.0, 1.0) : 0.90;
+
+        final newPrescription = DiseasePrescription.fromLabel(best.key, normalizedConf);
+        setState(() {
+          _activePrescription = newPrescription;
+        });
+        await _loadDbPrescription(newPrescription.diseaseId);
+        return;
+      }
+    }
+
+    String fallbackLabel;
+    if (cropKey.toLowerCase() == 'pepper') {
+      fallbackLabel = 'Pepper_bell_Bacterial_spot';
+    } else if (cropKey.toLowerCase() == 'potato') {
+      fallbackLabel = 'Potato_Early_blight';
+    } else {
+      fallbackLabel = 'Tomato_Early_blight';
+    }
+    final newPrescription = DiseasePrescription.fromLabel(fallbackLabel, 0.92);
+    setState(() {
+      _activePrescription = newPrescription;
+    });
+    await _loadDbPrescription(fallbackLabel);
   }
 
   @override
@@ -83,7 +150,7 @@ class _ResultScreenState extends State<ResultScreen> {
         organicTreatmentMl: _dbPrescription!.organicInstructionsMl,
       );
     } else {
-      await _voiceService.speakMalayalam(widget.prescription.malayalamAudioText);
+      await _voiceService.speakMalayalam(_activePrescription.malayalamAudioText);
     }
   }
 
@@ -101,12 +168,12 @@ class _ResultScreenState extends State<ResultScreen> {
       _isPlayingMalayalam = false;
     });
 
-    await _voiceService.speakEnglish(widget.prescription.englishAudioText);
+    await _voiceService.speakEnglish(_activePrescription.englishAudioText);
   }
 
   @override
   Widget build(BuildContext context) {
-    final prescription = widget.prescription;
+    final prescription = _activePrescription;
     final isHealthy = prescription.severity == SeverityLevel.healthy;
     final isSevere = prescription.severity == SeverityLevel.severe;
     final severityColor = isHealthy
@@ -209,6 +276,46 @@ class _ResultScreenState extends State<ResultScreen> {
                           ),
                         ],
                       ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Crop Context Switcher Card
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.tune, size: 16, color: Colors.green.shade700),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Scanning a different crop? Switch view:",
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildCropSwitchChip('Pepper', '🌶️ Bell Pepper (കാപ്സിക്കം)'),
+                      const SizedBox(width: 8),
+                      _buildCropSwitchChip('Tomato', '🍅 Tomato (തക്കാളി)'),
+                      const SizedBox(width: 8),
+                      _buildCropSwitchChip('Potato', '🥔 Potato (ഉരുളക്കിഴങ്ങ്)'),
                     ],
                   ),
                 ),
@@ -562,5 +669,31 @@ class _ResultScreenState extends State<ResultScreen> {
     }
 
     return "${prescription.knapsackTankDosage} (Adjusted for ${_selectedTankVolume}L tank)";
+  }
+
+  Widget _buildCropSwitchChip(String cropKey, String label) {
+    final isSelected = _currentCrop.toLowerCase() == cropKey.toLowerCase();
+    return GestureDetector(
+      onTap: () => _switchCrop(cropKey),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.green.shade700 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Colors.green.shade700 : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black87,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
   }
 }

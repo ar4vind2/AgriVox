@@ -7,8 +7,13 @@ import 'result_screen.dart';
 
 class ScannerScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
+  final String initialCrop;
 
-  const ScannerScreen({super.key, required this.cameras});
+  const ScannerScreen({
+    super.key,
+    required this.cameras,
+    this.initialCrop = 'All',
+  });
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -21,10 +26,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
   FlashMode _flashMode = FlashMode.off;
   int _selectedCameraIndex = 0;
   String? _errorMessage;
+  late String _selectedCrop;
 
   @override
   void initState() {
     super.initState();
+    _selectedCrop = widget.initialCrop;
     _initCamera();
   }
 
@@ -90,7 +97,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
     try {
       final xFile = await _controller!.takePicture();
-      final result = await TFLiteService().processAndClassify(xFile.path);
+      final result = await TFLiteService().processAndClassify(
+        xFile.path,
+        targetCrop: _selectedCrop == 'All' ? null : _selectedCrop,
+      );
 
       if (!mounted) return;
 
@@ -139,6 +149,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
           builder: (_) => ResultScreen(
             croppedImage: result.croppedImageFile,
             prescription: result.prescription,
+            classProbabilities: result.classProbabilities,
+            initialCrop: _selectedCrop,
           ),
         ),
       );
@@ -229,6 +241,39 @@ class _ScannerScreenState extends State<ScannerScreen> {
               ],
             ),
           ),
+
+          // Crop Target Filter Bar
+          if (!_isAnalyzing)
+            Positioned(
+              bottom: 130,
+              left: 16,
+              right: 16,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white24, width: 1),
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildCropChip('All', '🌿 Auto'),
+                        const SizedBox(width: 4),
+                        _buildCropChip('Pepper', '🌶️ Pepper'),
+                        const SizedBox(width: 4),
+                        _buildCropChip('Tomato', '🍅 Tomato'),
+                        const SizedBox(width: 4),
+                        _buildCropChip('Potato', '🥔 Potato'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
           // Shutter / Capture Button
           Positioned(
@@ -357,6 +402,33 @@ class _ScannerScreenState extends State<ScannerScreen> {
       child: IconButton(
         icon: Icon(icon, color: color, size: 22),
         onPressed: onPressed,
+      ),
+    );
+  }
+
+  Widget _buildCropChip(String cropKey, String label) {
+    final isSelected = _selectedCrop.toLowerCase() == cropKey.toLowerCase();
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedCrop = cropKey;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.greenAccent.shade700 : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.white70,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }

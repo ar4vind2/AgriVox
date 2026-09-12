@@ -68,4 +68,37 @@ void main() {
     expect(ood.confidence, 0.15);
     expect(ood.confidence < 0.65, isTrue);
   });
+
+  test('Crop-constrained resolution correctly isolates Pepper Bacterial Spot from Tomato classes', () {
+    // Simulated raw model probabilities where Tomato Early Blight was falsely dominant
+    final mockScores = {
+      'Pepper_bell_Bacterial_spot': 0.08,
+      'Pepper_bell_healthy': 0.005,
+      'Potato_Early_blight': 0.01,
+      'Potato_Late_blight': 0.005,
+      'Potato_healthy': 0.005,
+      'Tomato_Early_blight': 0.89,
+      'Tomato_Late_blight': 0.003,
+      'Tomato_Leaf_Mold': 0.001,
+      'Tomato_Septoria_leaf_spot': 0.001,
+      'Tomato_healthy': 0.000,
+    };
+
+    // Filter to Pepper classes
+    final pepperEntries = mockScores.entries
+        .where((e) => e.key.toLowerCase().contains('pepper'))
+        .toList();
+    pepperEntries.sort((a, b) => b.value.compareTo(a.value));
+    final bestPepper = pepperEntries.first;
+    final sumPepper = pepperEntries.fold<double>(0.0, (sum, e) => sum + e.value);
+    final normalizedPepperConf = bestPepper.value / sumPepper;
+
+    expect(bestPepper.key, 'Pepper_bell_Bacterial_spot');
+    expect(normalizedPepperConf > 0.90, isTrue);
+
+    final pepperRx = DiseasePrescription.fromLabel(bestPepper.key, normalizedPepperConf);
+    expect(pepperRx.diseaseId, 'Pepper_bell_Bacterial_spot');
+    expect(pepperRx.cropName.contains('Pepper'), isTrue);
+    expect(pepperRx.confidence > 0.90, isTrue);
+  });
 }

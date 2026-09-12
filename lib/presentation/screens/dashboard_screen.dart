@@ -186,11 +186,11 @@ class DashboardScreen extends StatelessWidget {
           // Crop Badges Grid
           Row(
             children: [
-              _buildCropCard("Tomato", "തക്കാളി", Icons.circle, Colors.red.shade700),
+              _buildCropCard(context, "Tomato", "തക്കാളി", Icons.circle, Colors.red.shade700, "Tomato"),
               const SizedBox(width: 10),
-              _buildCropCard("Potato", "ഉരുളക്കിഴങ്ങ്", Icons.grass, Colors.brown.shade600),
+              _buildCropCard(context, "Potato", "ഉരുളക്കിഴങ്ങ്", Icons.grass, Colors.brown.shade600, "Potato"),
               const SizedBox(width: 10),
-              _buildCropCard("Bell Pepper", "കാപ്സിക്കം", Icons.spa, Colors.deepOrange.shade600),
+              _buildCropCard(context, "Bell Pepper", "കാപ്സിക്കം", Icons.spa, Colors.deepOrange.shade600, "Pepper"),
             ],
           ),
 
@@ -231,22 +231,46 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCropCard(String titleEn, String titleMl, IconData icon, Color color) {
+  Widget _buildCropCard(
+    BuildContext context,
+    String titleEn,
+    String titleMl,
+    IconData icon,
+    Color color,
+    String cropKey,
+  ) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-        decoration: BoxDecoration(
-          color: Colors.white,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ScannerScreen(
+                  cameras: cameras,
+                  initialCrop: cropKey,
+                ),
+              ),
+            );
+          },
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 6),
-            Text(titleEn, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            Text(titleMl, style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
-          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              children: [
+                Icon(icon, color: color, size: 24),
+                const SizedBox(height: 6),
+                Text(titleEn, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(titleMl, style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -71,7 +71,8 @@ class TFLiteService {
     DiseasePrescription prescription,
     bool isValidPlant,
     int inferenceTimeMs,
-  })> processAndClassify(String imagePath) async {
+    Map<String, double> classProbabilities,
+  })> processAndClassify(String imagePath, {String? targetCrop}) async {
     final stopwatch = Stopwatch()..start();
     final rawBytes = await File(imagePath).readAsBytes();
     final originalImage = img.decodeImage(rawBytes);
@@ -135,18 +136,20 @@ class TFLiteService {
         prescription: DiseasePrescription.fromLabel('unmapped_pathology', 0.15),
         isValidPlant: false,
         inferenceTimeMs: stopwatch.elapsedMilliseconds,
+        classProbabilities: const <String, double>{},
       );
     }
 
     if (_isModelLoaded && _interpreter != null) {
       try {
-        final prescription = await _runTFLiteInference(resized);
+        final inferenceResult = await _runTFLiteInference(resized, targetCrop: targetCrop);
         stopwatch.stop();
         return (
           croppedImageFile: croppedFile,
-          prescription: prescription,
+          prescription: inferenceResult.prescription,
           isValidPlant: true,
           inferenceTimeMs: stopwatch.elapsedMilliseconds,
+          classProbabilities: inferenceResult.classProbabilities,
         );
       } catch (inferenceError) {
         debugPrint("TFLite inference error: $inferenceError. Providing agronomy diagnosis.");
@@ -160,6 +163,7 @@ class TFLiteService {
       prescription: sample,
       isValidPlant: true,
       inferenceTimeMs: stopwatch.elapsedMilliseconds,
+      classProbabilities: const <String, double>{},
     );
   }
 
@@ -191,7 +195,10 @@ class TFLiteService {
     return true;
   }
 
-  Future<DiseasePrescription> _runTFLiteInference(img.Image image) async {
+  Future<({DiseasePrescription prescription, Map<String, double> classProbabilities})> _runTFLiteInference(
+    img.Image image, {
+    String? targetCrop,
+  }) async {
     final inputTensors = _interpreter!.getInputTensors();
     final inputShape = inputTensors.isNotEmpty ? inputTensors.first.shape : [1, 3, 224, 224];
     final isNCHW = inputShape.length == 4 && inputShape[1] == 3;
@@ -243,39 +250,79 @@ class TFLiteService {
     _interpreter!.run(input, output);
 
     final rawScores = output[0];
-    int maxIndex = 0;
-    double maxLogit = rawScores.isNotEmpty ? rawScores[0] : 0.0;
-
-    for (int i = 1; i < rawScores.length; i++) {
-      if (rawScores[i] > maxLogit) {
-        maxLogit = rawScores[i];
-        maxIndex = i;
-      }
-    }
-
-    // Check if model already outputs Softmax probabilities (sum ~= 1.0)
-    // Applying Softmax twice compresses 95%+ confidence down to 20%-30%!
     final sumRaw = rawScores.fold<double>(0.0, (sum, val) => sum + val);
-    double confidence;
+
+    // Compute normalized probabilities across all classes
+    List<double> normalizedProbs;
     if (sumRaw >= 0.85 && sumRaw <= 1.15) {
-      // Model output is already normalized probabilities
-      confidence = maxLogit.clamp(0.0, 1.0);
+      normalizedProbs = rawScores.map((s) => s.clamp(0.0, 1.0)).toList();
     } else {
-      // Raw unnormalized logits: apply Softmax
+      double maxLogit = rawScores.isNotEmpty ? rawScores[0] : 0.0;
+      for (final s in rawScores) {
+        if (s > maxLogit) maxLogit = s;
+      }
       final expList = rawScores.map((s) => math.exp(s - maxLogit)).toList();
       final sumExp = expList.reduce((a, b) => a + b);
-      confidence = sumExp > 0 ? (expList[maxIndex] / sumExp).clamp(0.0, 1.0) : 0.95;
+      normalizedProbs = expList.map((e) => sumExp > 0 ? (e / sumExp).clamp(0.0, 1.0) : 0.1).toList();
     }
 
-    final detectedLabel = (_labels.isNotEmpty && maxIndex < _labels.length)
-        ? _labels[maxIndex]
-        : 'Pepper_bell_Bacterial_spot';
+    final Map<String, double> allProbabilities = {};
+    for (int i = 0; i < _labels.length && i < normalizedProbs.length; i++) {
+      allProbabilities[_labels[i]] = normalizedProbs[i];
+    }
 
-    // If model confidence is low (< 0.60), do not declare a false high confidence disease
+    String detectedLabel;
+    double confidence;
+
+    // Crop-constrained re-ranking: if target crop is specified (e.g. 'Pepper', 'Tomato', 'Potato')
+    if (targetCrop != null && targetCrop.isNotEmpty && targetCrop.toLowerCase() != 'all') {
+      final cropKey = targetCrop.toLowerCase();
+      final candidateClasses = _labels.where((l) => l.toLowerCase().contains(cropKey)).toList();
+
+      if (candidateClasses.isNotEmpty) {
+        double maxCandidateScore = -double.infinity;
+        detectedLabel = candidateClasses.first;
+        double sumCandidateScores = 0.0;
+
+        for (final cls in candidateClasses) {
+          final score = allProbabilities[cls] ?? 0.0;
+          sumCandidateScores += score;
+          if (score > maxCandidateScore) {
+            maxCandidateScore = score;
+            detectedLabel = cls;
+          }
+        }
+
+        // Relative probability within targeted crop domain
+        confidence = sumCandidateScores > 0
+            ? (maxCandidateScore / sumCandidateScores).clamp(0.0, 1.0)
+            : 0.90;
+      } else {
+        final bestEntry = allProbabilities.entries.isNotEmpty
+            ? allProbabilities.entries.reduce((a, b) => a.value > b.value ? a : b)
+            : const MapEntry('Pepper_bell_Bacterial_spot', 0.95);
+        detectedLabel = bestEntry.key;
+        confidence = bestEntry.value;
+      }
+    } else {
+      // Auto / Unconstrained Mode: take global top-1 class
+      final bestEntry = allProbabilities.entries.isNotEmpty
+          ? allProbabilities.entries.reduce((a, b) => a.value > b.value ? a : b)
+          : const MapEntry('Pepper_bell_Bacterial_spot', 0.95);
+      detectedLabel = bestEntry.key;
+      confidence = bestEntry.value;
+    }
+
+    DiseasePrescription prescription;
     if (confidence < 0.60) {
-      return DiseasePrescription.fromLabel('unmapped_pathology', confidence);
+      prescription = DiseasePrescription.fromLabel('unmapped_pathology', confidence);
+    } else {
+      prescription = DiseasePrescription.fromLabel(detectedLabel, confidence);
     }
 
-    return DiseasePrescription.fromLabel(detectedLabel, confidence);
+    return (
+      prescription: prescription,
+      classProbabilities: allProbabilities,
+    );
   }
 }
