@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Organic Leaf Gradient (Emerald to Sprout Green) -->
+    <linearGradient id="agriLeaf" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B5E20"/>
+      <stop offset="60%" stop-color="#2E7D32"/>
+      <stop offset="100%" stop-color="#4CAF50"/>
+    </linearGradient>
+
+    <!-- Voice Synthesis Gradient (Deep Forest to Acoustic Teal) -->
+    <linearGradient id="voxWave" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00695C"/>
+      <stop offset="50%" stop-color="#00897B"/>
+      <stop offset="100%" stop-color="#26A69A"/>
+    </linearGradient>
+
+    <!-- Edge-AI Targeting Reticle Accent -->
+    <linearGradient id="reticleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#81C784"/>
+      <stop offset="100%" stop-color="#4DB6AC"/>
+    </linearGradient>
+
+    <!-- Soft Ambient Shadow for Contrast Over Light or Dark Backgrounds -->
+    <filter id="ambientShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0A2417" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#ambientShadow)">
+    <!-- 1. Edge-AI Viewfinder Brackets (Camera / Vision Reticle) -->
+    <g fill="none" stroke="url(#reticleGrad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 130 110 L 96 110 A 18 18 0 0 0 78 128 L 78 162" />
+      <path d="M 382 110 L 416 110 A 18 18 0 0 1 434 128 L 434 162" />
+      <path d="M 130 402 L 96 402 A 18 18 0 0 1 78 384 L 78 350" />
+      <path d="M 382 402 L 416 402 A 18 18 0 0 0 434 384 L 434 350" />
+    </g>
+
+    <!-- 2. The Living Leaf (Agri: Crop Health & Diagnostics) -->
+    <path d="M 256 90 
+             C 175 115, 118 190, 118 276 
+             C 118 352, 178 412, 256 430 
+             Z" 
+          fill="url(#agriLeaf)"/>
+
+    <!-- Subtle Internal Leaf Vein Accent -->
+    <path d="M 160 295 C 190 280, 225 285, 256 295" 
+          fill="none" 
+          stroke="#81C784" 
+          stroke-width="4" 
+          stroke-linecap="round" 
+          opacity="0.5"/>
+    <path d="M 180 230 C 205 220, 230 225, 256 235" 
+          fill="none" 
+          stroke="#81C784" 
+          stroke-width="4" 
+          stroke-linecap="round" 
+          opacity="0.5"/>
+
+    <!-- 3. Central Stem / Neural Axis -->
+    <path d="M 256 90 
+             C 256 220, 256 350, 256 430 
+             C 256 446, 246 456, 234 462" 
+          fill="none" 
+          stroke="#1B5E20" 
+          stroke-width="12" 
+          stroke-linecap="round"/>
+
+    <!-- 4. The Acoustic Voice Radiations (Vox: Offline Vernacular Guidance) -->
+    <!-- Inner Harmonic Wave -->
+    <path d="M 292 216 
+             C 334 232, 334 280, 292 296" 
+          fill="none" 
+          stroke="url(#voxWave)" 
+          stroke-width="14" 
+          stroke-linecap="round"/>
+
+    <!-- Middle Harmonic Wave -->
+    <path d="M 328 174 
+             C 392 208, 392 304, 328 338" 
+          fill="none" 
+          stroke="url(#voxWave)" 
+          stroke-width="14" 
+          stroke-linecap="round"/>
+
+    <!-- Outer Primary Broadcast Wave -->
+    <path d="M 364 132 
+             C 452 184, 452 328, 364 380" 
+          fill="none" 
+          stroke="url(#voxWave)" 
+          stroke-width="14" 
+          stroke-linecap="round"/>
+
+    <!-- 5. Edge Intelligence Node (Offline Data Core) -->
+    <circle cx="256" cy="256" r="14" fill="#FFFFFF"/>
+    <circle cx="256" cy="256" r="8" fill="#00897B"/>
+    <circle cx="256" cy="256" r="3" fill="#E0F2F1"/>
+  </g>
+</svg>

@@ -186,7 +186,18 @@ class _ResultScreenState extends State<ResultScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F5),
       appBar: AppBar(
-        title: const Text("Diagnostic Report", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/icon/app_icon_no_bg.png',
+              width: 26,
+              height: 26,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(width: 8),
+            const Text("Diagnostic Report", style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0.5,

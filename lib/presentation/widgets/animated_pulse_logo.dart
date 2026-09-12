@@ -154,10 +154,10 @@ class _AnimatedPulseLogoState extends State<AnimatedPulseLogo>
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(logoSize * 0.24),
                 child: Image.asset(
-                  'assets/icon/app_icon.png',
+                  'assets/icon/app_icon_no_bg.png',
                   width: logoSize,
                   height: logoSize,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../services/prescription_repository.dart';
 import '../../services/tflite_service.dart';
 import '../../services/voice_service.dart';
@@ -457,10 +458,10 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // Official App Icon Image
-                    Image.asset(
-                      'assets/icon/app_icon.png',
-                      fit: BoxFit.cover,
+                    // Official App Icon Vector SVG
+                    SvgPicture.asset(
+                      'assets/icon/app_icon.svg',
+                      fit: BoxFit.contain,
                     ),
 
                     // Diagonal Metallic Light Sheen Sweep
