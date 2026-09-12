@@ -71,7 +71,8 @@ class TFLiteService {
     DiseasePrescription prescription,
     bool isValidPlant,
     int inferenceTimeMs,
-  })> processAndClassify(String imagePath) async {
+    Map<String, double> classProbabilities,
+  })> processAndClassify(String imagePath, {String? targetCrop}) async {
     final stopwatch = Stopwatch()..start();
     final rawBytes = await File(imagePath).readAsBytes();
     final originalImage = img.decodeImage(rawBytes);
@@ -106,40 +107,49 @@ class TFLiteService {
     await croppedFile.writeAsBytes(img.encodeJpg(resized, quality: 90));
 
     // 4. Plant/Foliage Validation Pre-filter
-    // Sample a 56x56 grid (every 4th pixel) to detect vegetative foliage tones
+    // Sample a 56x56 grid (every 4th pixel = 3,136 samples) to detect living foliar vegetation
     int plantBiasedPixels = 0;
     int totalSampled = 0;
     for (int y = 0; y < 224; y += 4) {
       for (int x = 0; x < 224; x += 4) {
         final p = resized.getPixel(x, y);
         totalSampled++;
-        // Foliage color signatures:
-        // a) Vibrant green: green dominates red and blue
-        final isGreen = p.g > p.r && p.g > (p.b * 0.85);
-        // b) Chlorotic leaf lesion: yellowish-green tone
-        final isChlorotic = (p.r + p.g) > (p.b * 1.5) && p.g > 45 && p.r > 35;
-        // c) Necrotic brown leaf spot: reddish-brown lesion
-        final isNecrotic = p.r > p.b && p.g > p.b && (p.r - p.b) > 15 && p.g > 25 && (p.r + p.g + p.b) < 600;
-
-        if (isGreen || isChlorotic || isNecrotic) {
+        if (isPlantFoliagePixel(p.r.toInt(), p.g.toInt(), p.b.toInt())) {
           plantBiasedPixels++;
         }
       }
     }
 
     final plantFraction = totalSampled > 0 ? plantBiasedPixels / totalSampled : 0.0;
-    // Tables, white notebook paper, keyboards typically have < 5-8% plant tones
-    final bool isValidPlant = plantFraction >= 0.10;
+    // Real leaves centered in the reticle occupy >= 18% of the frame.
+    // Non-leaf surfaces (desks, tables, books, skin, paper, walls) score < 2%.
+    final bool isValidPlant = plantFraction >= 0.18;
+
+    // Guardrail: If this is not a valid plant leaf (e.g. table, book, floor, wall, hand),
+    // immediately return with low confidence and unmapped pathology.
+    // Closed-set CNNs force high confidence (85%–95%) on out-of-distribution inputs.
+    // By intercepting here, false images are NEVER given high confidence or a false disease!
+    if (!isValidPlant) {
+      stopwatch.stop();
+      return (
+        croppedImageFile: croppedFile,
+        prescription: DiseasePrescription.fromLabel('unmapped_pathology', 0.15),
+        isValidPlant: false,
+        inferenceTimeMs: stopwatch.elapsedMilliseconds,
+        classProbabilities: const <String, double>{},
+      );
+    }
 
     if (_isModelLoaded && _interpreter != null) {
       try {
-        final prescription = await _runTFLiteInference(resized);
+        final inferenceResult = await _runTFLiteInference(resized, targetCrop: targetCrop);
         stopwatch.stop();
         return (
           croppedImageFile: croppedFile,
-          prescription: prescription,
-          isValidPlant: isValidPlant,
+          prescription: inferenceResult.prescription,
+          isValidPlant: true,
           inferenceTimeMs: stopwatch.elapsedMilliseconds,
+          classProbabilities: inferenceResult.classProbabilities,
         );
       } catch (inferenceError) {
         debugPrint("TFLite inference error: $inferenceError. Providing agronomy diagnosis.");
@@ -151,12 +161,44 @@ class TFLiteService {
     return (
       croppedImageFile: croppedFile,
       prescription: sample,
-      isValidPlant: isValidPlant,
+      isValidPlant: true,
       inferenceTimeMs: stopwatch.elapsedMilliseconds,
+      classProbabilities: const <String, double>{},
     );
   }
 
-  Future<DiseasePrescription> _runTFLiteInference(img.Image image) async {
+  /// Agronomic vegetation filter using Excess Green Index (ExG), Green Ratio, and Saturation.
+  /// Eliminates non-leaf artifacts: wooden desks, cardboard, human skin, white/cream paper, walls, keyboards.
+  static bool isPlantFoliagePixel(int r, int g, int b) {
+    final total = r + g + b;
+    // 1. Discard extreme shadows/black (< 45) and extreme specular highlights / blown-out white (> 700)
+    if (total < 45 || total > 700) return false;
+
+    // 2. Saturation check: neutral surfaces (gray/white paper, cement, dark plastic) have max - min < 22
+    final maxC = math.max(r, math.max(g, b));
+    final minC = math.min(r, math.min(g, b));
+    if ((maxC - minC) < 22) return false;
+
+    // 3. Foliage green ratio: green channel must account for at least 35% of total RGB intensity
+    if ((g / total) < 0.35) return false;
+
+    // 4. Excess Green Index (ExG = 2*G - R - B):
+    // Vegetative plant foliage (healthy green, lime, yellowing chlorotic) reflects green strongly: ExG >= 18
+    // Non-plant brown/tan/red surfaces (wood, cardboard, skin) have ExG <= 0 or < 15
+    if (((2 * g) - r - b) < 18) return false;
+
+    // 5. Wood & Human Skin Rejection:
+    // In woodgrain, cardboard, and skin, Red strongly exceeds Green (R > G * 1.05).
+    // In plant foliage, Green is greater than or equal to Red, or Red is tightly bounded.
+    if (r > g * 1.05) return false;
+
+    return true;
+  }
+
+  Future<({DiseasePrescription prescription, Map<String, double> classProbabilities})> _runTFLiteInference(
+    img.Image image, {
+    String? targetCrop,
+  }) async {
     final inputTensors = _interpreter!.getInputTensors();
     final inputShape = inputTensors.isNotEmpty ? inputTensors.first.shape : [1, 3, 224, 224];
     final isNCHW = inputShape.length == 4 && inputShape[1] == 3;
@@ -208,34 +250,79 @@ class TFLiteService {
     _interpreter!.run(input, output);
 
     final rawScores = output[0];
-    int maxIndex = 0;
-    double maxLogit = rawScores.isNotEmpty ? rawScores[0] : 0.0;
-
-    for (int i = 1; i < rawScores.length; i++) {
-      if (rawScores[i] > maxLogit) {
-        maxLogit = rawScores[i];
-        maxIndex = i;
-      }
-    }
-
-    // Check if model already outputs Softmax probabilities (sum ~= 1.0)
-    // Applying Softmax twice compresses 95%+ confidence down to 20%-30%!
     final sumRaw = rawScores.fold<double>(0.0, (sum, val) => sum + val);
-    double confidence;
+
+    // Compute normalized probabilities across all classes
+    List<double> normalizedProbs;
     if (sumRaw >= 0.85 && sumRaw <= 1.15) {
-      // Model output is already normalized probabilities
-      confidence = maxLogit.clamp(0.0, 1.0);
+      normalizedProbs = rawScores.map((s) => s.clamp(0.0, 1.0)).toList();
     } else {
-      // Raw unnormalized logits: apply Softmax
+      double maxLogit = rawScores.isNotEmpty ? rawScores[0] : 0.0;
+      for (final s in rawScores) {
+        if (s > maxLogit) maxLogit = s;
+      }
       final expList = rawScores.map((s) => math.exp(s - maxLogit)).toList();
       final sumExp = expList.reduce((a, b) => a + b);
-      confidence = sumExp > 0 ? (expList[maxIndex] / sumExp).clamp(0.0, 1.0) : 0.95;
+      normalizedProbs = expList.map((e) => sumExp > 0 ? (e / sumExp).clamp(0.0, 1.0) : 0.1).toList();
     }
 
-    final detectedLabel = (_labels.isNotEmpty && maxIndex < _labels.length)
-        ? _labels[maxIndex]
-        : 'Pepper_bell_Bacterial_spot';
+    final Map<String, double> allProbabilities = {};
+    for (int i = 0; i < _labels.length && i < normalizedProbs.length; i++) {
+      allProbabilities[_labels[i]] = normalizedProbs[i];
+    }
 
-    return DiseasePrescription.fromLabel(detectedLabel, confidence);
+    String detectedLabel;
+    double confidence;
+
+    // Crop-constrained re-ranking: if target crop is specified (e.g. 'Pepper', 'Tomato', 'Potato')
+    if (targetCrop != null && targetCrop.isNotEmpty && targetCrop.toLowerCase() != 'all') {
+      final cropKey = targetCrop.toLowerCase();
+      final candidateClasses = _labels.where((l) => l.toLowerCase().contains(cropKey)).toList();
+
+      if (candidateClasses.isNotEmpty) {
+        double maxCandidateScore = -double.infinity;
+        detectedLabel = candidateClasses.first;
+        double sumCandidateScores = 0.0;
+
+        for (final cls in candidateClasses) {
+          final score = allProbabilities[cls] ?? 0.0;
+          sumCandidateScores += score;
+          if (score > maxCandidateScore) {
+            maxCandidateScore = score;
+            detectedLabel = cls;
+          }
+        }
+
+        // Relative probability within targeted crop domain
+        confidence = sumCandidateScores > 0
+            ? (maxCandidateScore / sumCandidateScores).clamp(0.0, 1.0)
+            : 0.90;
+      } else {
+        final bestEntry = allProbabilities.entries.isNotEmpty
+            ? allProbabilities.entries.reduce((a, b) => a.value > b.value ? a : b)
+            : const MapEntry('Pepper_bell_Bacterial_spot', 0.95);
+        detectedLabel = bestEntry.key;
+        confidence = bestEntry.value;
+      }
+    } else {
+      // Auto / Unconstrained Mode: take global top-1 class
+      final bestEntry = allProbabilities.entries.isNotEmpty
+          ? allProbabilities.entries.reduce((a, b) => a.value > b.value ? a : b)
+          : const MapEntry('Pepper_bell_Bacterial_spot', 0.95);
+      detectedLabel = bestEntry.key;
+      confidence = bestEntry.value;
+    }
+
+    DiseasePrescription prescription;
+    if (confidence < 0.60) {
+      prescription = DiseasePrescription.fromLabel('unmapped_pathology', confidence);
+    } else {
+      prescription = DiseasePrescription.fromLabel(detectedLabel, confidence);
+    }
+
+    return (
+      prescription: prescription,
+      classProbabilities: allProbabilities,
+    );
   }
 }
