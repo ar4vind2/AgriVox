@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'scanner_screen.dart';
+import 'voice_assistant_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   final List<CameraDescription> cameras;
@@ -162,6 +163,84 @@ class DashboardScreen extends StatelessWidget {
             ),
           ),
 
+          const SizedBox(height: 12),
+
+          // Voice Copilot Assistant Card
+          InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const VoiceAssistantScreen(),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.teal.shade200, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.teal.shade200),
+                    ),
+                    child: Icon(Icons.mic, color: Colors.teal.shade800, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              "വോയ്‌സ് അസിസ്റ്റന്റ്",
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.teal.shade100,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                "Voice AI",
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          "വിളയുടെ ലക്ഷണങ്ങൾ പറഞ്ഞു രോഗനിർണ്ണയം നടത്താം",
+                          style: TextStyle(fontSize: 12.5, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, size: 16, color: Colors.teal.shade700),
+                ],
+              ),
+            ),
+          ),
+
           const SizedBox(height: 24),
 
           // Supported Crops Header
@@ -244,6 +323,23 @@ class DashboardScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const VoiceAssistantScreen(),
+            ),
+          );
+        },
+        backgroundColor: Colors.green.shade800,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.mic),
+        label: const Text(
+          "വോയ്‌സ് അസിസ്റ്റന്റ്",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }

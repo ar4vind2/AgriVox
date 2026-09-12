@@ -22,8 +22,9 @@ dependencies:
   sqflite: ^2.3.3+1
   path: ^1.9.0
 
-  # Malayalam Voice / Text-to-Speech
+  # Malayalam Voice / Text-to-Speech & Speech-to-Text
   flutter_tts: ^4.0.2
+  speech_to_text: ^7.0.0
   flutter_svg: ^2.3.0
 
 dev_dependencies:

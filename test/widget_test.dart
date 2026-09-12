@@ -7,6 +7,8 @@ import 'package:agrivox/presentation/widgets/animated_pulse_logo.dart';
 import 'package:agrivox/services/dosage_calculator.dart';
 import 'package:agrivox/services/tflite_service.dart';
 import 'package:agrivox/services/voice_service.dart';
+import 'package:agrivox/services/voice_assistant_service.dart';
+import 'package:agrivox/presentation/screens/voice_assistant_screen.dart';
 
 void main() {
   testWidgets('AgriVoxApp smoke test - DashboardScreen direct', (WidgetTester tester) async {
@@ -212,5 +214,75 @@ void main() {
     expect(find.text('Tomato'), findsOneWidget);
     expect(find.text('Potato'), findsOneWidget);
     expect(find.text('8 Crops • 25 Prescriptions'), findsOneWidget);
+    expect(find.text('വോയ്‌സ് അസിസ്റ്റന്റ്'), findsNWidgets(2));
+  });
+
+  test('AgronomyVoiceAssistantService accurately diagnoses Malayalam spoken symptoms', () async {
+    final service = AgronomyVoiceAssistantService();
+
+    // 1. Banana Panama Wilt
+    final bananaResult = await service.analyzeSpeechSymptoms('വാഴയിൽ ഇലകൾ മഞ്ഞളിച്ച് ഒടിഞ്ഞുതൂങ്ങുന്നു വാട്ടം വരുന്നു');
+    expect(bananaResult.diseaseKey, 'Banana_Panama_Wilt');
+    expect(bananaResult.detectedCrop, 'Banana');
+    expect(bananaResult.confidence > 0.80, isTrue);
+    expect(bananaResult.spokenExplanationMl.contains('വാഴയിൽ പനാമ വാട്ടം'), isTrue);
+
+    // 2. Rice Blast
+    final riceResult = await service.analyzeSpeechSymptoms('നെല്ലിൽ കതിരുകൾ ഒടിഞ്ഞ് കുലവാട്ടം വരുന്നു');
+    expect(riceResult.diseaseKey, 'Rice_Blast');
+    expect(riceResult.detectedCrop, 'Paddy');
+    expect(riceResult.confidence > 0.80, isTrue);
+
+    // 3. Coconut Bud Rot
+    final coconutResult = await service.analyzeSpeechSymptoms('തെങ്ങിന്റെ മണ്ട ചീഞ്ഞ് നാമ്പ് അഴുകുന്നു');
+    expect(coconutResult.diseaseKey, 'Coconut_Bud_Rot');
+    expect(coconutResult.detectedCrop, 'Coconut');
+
+    // 4. Okra Yellow Vein Mosaic
+    final okraResult = await service.analyzeSpeechSymptoms('വെണ്ടയുടെ ഇലയിൽ മഞ്ഞ ഞരമ്പുകൾ കാണുന്നു വെള്ളീച്ച ഉണ്ട്');
+    expect(okraResult.diseaseKey, 'Okra_Yellow_Vein_Mosaic');
+    expect(okraResult.detectedCrop, 'Okra');
+
+    // 5. Tomato Late Blight
+    final tomatoResult = await service.analyzeSpeechSymptoms('തക്കാളി ഇലകളിൽ കരിഞ്ഞുണങ്ങൽ പടരുന്നു ലേറ്റ് ബ്ലൈറ്റ്');
+    expect(tomatoResult.diseaseKey, 'Tomato_Late_blight');
+    expect(tomatoResult.detectedCrop, 'Tomato');
+  });
+
+  test('AgronomyVoiceAssistantService accurately diagnoses English spoken symptoms', () async {
+    final service = AgronomyVoiceAssistantService();
+
+    final tomatoEarly = await service.analyzeSpeechSymptoms('Tomato leaves show dark concentric target rings');
+    expect(tomatoEarly.diseaseKey, 'Tomato_Early_blight');
+    expect(tomatoEarly.detectedCrop, 'Tomato');
+
+    final stemBleed = await service.analyzeSpeechSymptoms('Coconut trunk shows dark reddish fluid bleeding and bark cracks');
+    expect(stemBleed.diseaseKey, 'Coconut_Stem_Bleeding');
+    expect(stemBleed.detectedCrop, 'Coconut');
+  });
+
+  test('AgronomyVoiceAssistantService handles empty or unclear input safely', () async {
+    final service = AgronomyVoiceAssistantService();
+
+    final empty = await service.analyzeSpeechSymptoms('');
+    expect(empty.diseaseKey, 'Background_Noise');
+    expect(empty.confidence, 0.15);
+
+    final vague = await service.analyzeSpeechSymptoms('ഒരു പ്രശ്നം ഉണ്ട് എന്ത് ചെയ്യണം');
+    expect(vague.diseaseKey == 'unmapped_pathology' || vague.diseaseKey == 'Background_Noise', isTrue);
+  });
+
+  testWidgets('VoiceAssistantScreen renders title, mic, language toggle and symptom chips', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: VoiceAssistantScreen(),
+      ),
+    );
+
+    expect(find.text('കൃഷി വോയ്‌സ് അസിസ്റ്റന്റ്'), findsOneWidget);
+    expect(find.text('മലയാളം'), findsOneWidget);
+    expect(find.byIcon(Icons.mic_none), findsOneWidget);
+    expect(find.text('വാഴയിൽ ഇലകൾ മഞ്ഞളിച്ച് ഒടിഞ്ഞുതൂങ്ങുന്നു'), findsOneWidget);
+    expect(find.text('നെല്ലിൽ കതിരുകൾ ഒടിഞ്ഞ് കുലവാട്ടം വരുന്നു'), findsOneWidget);
   });
 }
