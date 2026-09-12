@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import '../../services/tflite_service.dart';
 import '../widgets/animated_pulse_logo.dart';
@@ -23,6 +24,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
   CameraController? _controller;
   bool _isReady = false;
   bool _isAnalyzing = false;
+  bool _showShutterBlink = false;
   FlashMode _flashMode = FlashMode.off;
   int _selectedCameraIndex = 0;
   String? _errorMessage;
@@ -91,8 +93,22 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Future<void> _captureAndAnalyze() async {
     if (_controller == null || !_controller!.value.isInitialized || _isAnalyzing) return;
 
+    // Haptic feedback for tactile shutter confirmation
+    HapticFeedback.mediumImpact();
+
+    // Trigger brief visual shutter blink
     setState(() {
+      _showShutterBlink = true;
       _isAnalyzing = true;
+    });
+
+    // Reset shutter flash after 120ms
+    Future.delayed(const Duration(milliseconds: 120), () {
+      if (mounted) {
+        setState(() {
+          _showShutterBlink = false;
+        });
+      }
     });
 
     try {
@@ -381,6 +397,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       ],
                     ),
                   ),
+                ),
+              ),
+            ),
+
+          // Shutter Blink Flash Overlay
+          if (_showShutterBlink)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  color: Colors.white.withValues(alpha: 0.85),
                 ),
               ),
             ),

@@ -27,6 +27,9 @@ class _PrescriptionCardState extends State<PrescriptionCard> {
   void initState() {
     super.initState();
     _voiceService.init();
+    _voiceService.setCompletionHandler(() {
+      if (mounted) setState(() => _isPlayingAudio = false);
+    });
   }
 
   @override
@@ -44,9 +47,17 @@ class _PrescriptionCardState extends State<PrescriptionCard> {
       chemicalName: widget.prescription.chemicalCure,
     );
 
+    final waitingClause = widget.prescription.waitingPeriodDays > 0
+        ? " വിളവെടുപ്പിന് മുൻപ് ${widget.prescription.waitingPeriodDays} ദിവസം കാത്തിരിക്കുക."
+        : " വിളവെടുപ്പ് ഇടവേള ബാധകമല്ല.";
+
     final instructions = _useOrganic
-        ? widget.prescription.organicInstructionsMl
-        : "${calc.dosageSummaryMl} വിളവെടുപ്പിന് മുൻപ് ${widget.prescription.waitingPeriodDays} ദിവസം കാത്തിരിക്കുക.";
+        ? (widget.prescription.organicInstructionsMl.isNotEmpty && widget.prescription.organicInstructionsMl.toLowerCase() != 'none'
+            ? widget.prescription.organicInstructionsMl
+            : "പ്രത്യേക ജൈവ കീടനാശിനി ആവശ്യമില്ല.")
+        : (widget.prescription.chemicalCure.toLowerCase() == 'none'
+            ? widget.prescription.chemicalInstructionsMl
+            : "${calc.dosageSummaryMl}$waitingClause");
 
     await _voiceService.speakPrescription(
       diseaseMl: widget.prescription.diseaseNameMl,
@@ -131,51 +142,106 @@ class _PrescriptionCardState extends State<PrescriptionCard> {
 
           // Instructions Body
           if (!_useOrganic) ...[
-            Text("ശുപാർശ ചെയ്ത മരുന്ന്: ${widget.prescription.chemicalCure}",
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            // Sprayer Tank Dosage Slider
-            Row(
-              children: [
-                const Text("സ്പ്രേയർ ടാങ്ക്:"),
-                Expanded(
-                  child: Slider(
-                    value: _tankVolume,
-                    min: 1,
-                    max: 20,
-                    divisions: 19,
-                    label: "${_tankVolume.toInt()}L",
-                    onChanged: (val) => setState(() => _tankVolume = val),
-                  ),
+            if (widget.prescription.chemicalCure.toLowerCase() == 'none') ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade200),
                 ),
-                Text("${_tankVolume.toInt()} L"),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
+                child: Text(
+                  widget.prescription.chemicalInstructionsMl.isNotEmpty
+                      ? widget.prescription.chemicalInstructionsMl
+                      : "ചെടി പൂർണ്ണ ആരോഗ്യത്തോടെയിരിക്കുന്നു. രാസവസ്തുക്കൾ ആവശ്യമില്ല.",
+                  style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.black87),
+                ),
               ),
-              child: Text(calc.dosageSummaryMl, style: const TextStyle(color: Colors.black87)),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              "വിളവെടുപ്പ് ഇടവേള (Waiting Period): ${widget.prescription.waitingPeriodDays} ദിവസം",
-              style: const TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.bold),
-            ),
+            ] else ...[
+              Text("ശുപാർശ ചെയ്ത മരുന്ന്: ${widget.prescription.chemicalCure}",
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              // Sprayer Tank Dosage Slider
+              Row(
+                children: [
+                  const Text("സ്പ്രേയർ ടാങ്ക്:"),
+                  Expanded(
+                    child: Slider(
+                      value: _tankVolume,
+                      min: 1,
+                      max: 20,
+                      divisions: 19,
+                      label: "${_tankVolume.toInt()}L",
+                      onChanged: (val) => setState(() => _tankVolume = val),
+                    ),
+                  ),
+                  Text("${_tankVolume.toInt()} L"),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(calc.dosageSummaryMl, style: const TextStyle(color: Colors.black87)),
+              ),
+              const SizedBox(height: 6),
+              if (widget.prescription.waitingPeriodDays > 0)
+                Text(
+                  "വിളവെടുപ്പ് ഇടവേള (Waiting Period): ${widget.prescription.waitingPeriodDays} ദിവസം",
+                  style: const TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.bold),
+                )
+              else
+                const Text(
+                  "വിളവെടുപ്പ് ഇടവേള ബാധകമല്ല (No waiting period required)",
+                  style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold),
+                ),
+            ],
           ] else ...[
-            Text("ജൈവ നിയന്ത്രണ രീതി: ${widget.prescription.organicCure}",
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
+            if (widget.prescription.organicCure.toLowerCase() != 'none' &&
+                widget.prescription.organicCure.trim().isNotEmpty) ...[
+              Text("ജൈവ നിയന്ത്രണ രീതി: ${widget.prescription.organicCure}",
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  widget.prescription.organicInstructionsMl.isNotEmpty
+                      ? widget.prescription.organicInstructionsMl
+                      : "സാധാരണ ജൈവ പരിചരണ രീതികൾ (വേപ്പിൻപിണ്ണാക്ക്, പഞ്ചഗവ്യം) തുടരുക.",
+                  style: const TextStyle(color: Colors.black87),
+                ),
               ),
-              child: Text(widget.prescription.organicInstructionsMl, style: const TextStyle(color: Colors.black87)),
-            ),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blueGrey.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.eco, size: 20, color: Colors.green),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "പ്രത്യേക ജൈവ കീടനാശിനി ആവശ്യമില്ല. സാധാരണ സസ്യസംരക്ഷണ രീതികൾ തുടരുക.",
+                        style: TextStyle(fontSize: 13, color: Colors.black87),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ],
       ),
