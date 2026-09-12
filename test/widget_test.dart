@@ -4,6 +4,7 @@ import 'package:agrivox/main.dart';
 import 'package:agrivox/models/disease_prescription.dart';
 import 'package:agrivox/presentation/screens/dashboard_screen.dart';
 import 'package:agrivox/presentation/widgets/animated_pulse_logo.dart';
+import 'package:agrivox/services/dosage_calculator.dart';
 import 'package:agrivox/services/tflite_service.dart';
 
 void main() {
@@ -100,5 +101,38 @@ void main() {
     expect(pepperRx.diseaseId, 'Pepper_bell_Bacterial_spot');
     expect(pepperRx.cropName.contains('Pepper'), isTrue);
     expect(pepperRx.confidence > 0.90, isTrue);
+  });
+
+  test('DosageCalculator correctly calculates knapsack tank dilution and land area math', () {
+    // 16L tank with 2.0g/L dosage (e.g. Copper Oxychloride for Bacterial Spot)
+    final tankResult = DosageCalculator.calculateByTankVolume(
+      tankVolumeLiters: 16.0,
+      dosagePerLiter: 2.0,
+      chemicalName: 'Copper Oxychloride 50 WP',
+    );
+    expect(tankResult.totalWaterLiters, 16.0);
+    expect(tankResult.totalProductGramsOrMl, 32.0);
+    expect(tankResult.unit, 'ഗ്രാം');
+    expect(tankResult.dosageSummaryMl.contains('16.0 ലീറ്റർ വെള്ളത്തിൽ 32.0 ഗ്രാം'), isTrue);
+
+    // 10L tank with 2.5g/L dosage
+    final smallTank = DosageCalculator.calculateByTankVolume(
+      tankVolumeLiters: 10.0,
+      dosagePerLiter: 2.5,
+      chemicalName: 'Ridomil',
+    );
+    expect(smallTank.totalWaterLiters, 10.0);
+    expect(smallTank.totalProductGramsOrMl, 25.0);
+
+    // Land area calculation: 10 cents plot
+    final areaResult = DosageCalculator.calculateByAreaInCents(
+      cents: 10.0,
+      dosagePerLiter: 2.0,
+      chemicalName: 'Mancozeb 75% WP',
+    );
+    // 10 cents * 1.5 L/cent = 15 L water -> 15 * 2.0 = 30.0 g
+    expect(areaResult.totalWaterLiters, 15.0);
+    expect(areaResult.totalProductGramsOrMl, 30.0);
+    expect(areaResult.dosageSummaryMl.contains('10.0 സെന്റ്'), isTrue);
   });
 }

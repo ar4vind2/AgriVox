@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../repositories/prescription_repository.dart';
+import '../../services/prescription_repository.dart';
 import '../../services/tflite_service.dart';
 import '../../services/voice_service.dart';
 import 'dashboard_screen.dart';
